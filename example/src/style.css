@@ -1,0 +1,28 @@
+:root {
+  --background: #ffffff;
+  --foreground: #16161d;
+  --card: #f4f4f6; /* a raised surface */
+  --card-foreground: var(--foreground);
+  --muted-foreground: #6b6b76;
+  --primary: #5b4bdb;
+  --primary-foreground: #ffffff;
+  --border: rgba(0, 0, 0, 0.1);
+  --radius: 10px;
+}
+
+.dark {
+  --background: #131316;
+  --foreground: #f2f2f5;
+  --card: #1d1d22;
+  --muted-foreground: #a0a0ad;
+  --primary: #8e80f9;
+  --primary-foreground: #131316;
+  --border: rgba(255, 255, 255, 0.12);
+}
+
+body { margin: 0; background: var(--background); color: var(--foreground); font: 16px/1.5 system-ui, sans-serif; }
+main { max-width: 560px; margin: 80px auto; padding: 0 20px; }
+.muted { color: var(--muted-foreground); }
+.card { background: var(--card); color: var(--card-foreground); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+button { font: inherit; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: inherit; cursor: pointer; }
+button.primary { background: var(--primary); color: var(--primary-foreground); border-color: transparent; }

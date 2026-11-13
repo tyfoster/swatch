@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Swatch: edit your CSS colour tokens live, on the page</title>
+    <meta name="description" content="Swatch is a dev-only panel for Vite apps. It finds the colour tokens in your stylesheets, previews every edit on the real app, and writes the result back to the file." />
+    <script>
+      // dark before first paint, when the system asks for it
+      if (matchMedia("(prefers-color-scheme: dark)").matches) document.documentElement.classList.add("dark")
+    </script>
+    <!-- the tokens load as a stylesheet for the first paint; the panel then holds its own copy of the same file -->
+    <link rel="stylesheet" href="./tokens.css" />
+    <link rel="stylesheet" href="./site.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <a class="brand" href="#top" aria-label="Swatch">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4.098 19.902a3.75 3.75 0 0 0 5.304 0l6.401-6.402M6.75 21A3.75 3.75 0 0 1 3 17.25V4.125C3 3.504 3.504 3 4.125 3h5.25c.621 0 1.125.504 1.125 1.125v4.072M6.75 21a3.75 3.75 0 0 0 3.75-3.75V8.197M6.75 21h13.125c.621 0 1.125-.504 1.125-1.125v-5.25c0-.621-.504-1.125-1.125-1.125h-4.072M10.5 8.197l2.88-2.88c.438-.439 1.15-.439 1.59 0l3.712 3.713c.44.44.44 1.152 0 1.59l-2.879 2.88M6.75 17.25h.008v.008H6.75v-.008Z" /></svg>
+          Swatch
+        </a>
+        <nav aria-label="Sections">
+          <a href="#install">Install</a>
+          <a href="#features">Features</a>
+          <a href="#faq">FAQ</a>
+        </nav>
+        <button class="ghost" id="theme" type="button">Dark</button>
+      </header>
+
+      <main id="top">
+        <div class="hero">
+          <div>
+            <h1>Edit your colour tokens live, on the page.</h1>
+            <p class="lede">Swatch is a dev-only panel for Vite apps. It finds the colour tokens in your CSS, previews every edit on the real app, and writes the result back to the file.</p>
+            <div class="install">
+              <code id="cmd">npm install swatch -D</code>
+              <button class="primary" id="copy" type="button">Copy</button>
+            </div>
+            <p class="hint"><b>Try it.</b><span>That panel is Swatch, and it is editing this page. Change <code>--sky</code>, or press Inspect and click the mountain.</span></p>
+
+            <figure class="painting">
+              <svg viewBox="0 0 600 360" role="img" aria-label="A landscape painted with this page's colour tokens: a sky, a sun, clouds, a mountain, a lake and trees">
+                <defs>
+                  <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" style="stop-color: var(--sky)" />
+                    <stop offset="1" style="stop-color: var(--sky-glow)" />
+                  </linearGradient>
+                </defs>
+                <rect width="600" height="250" fill="url(#sky)" />
+                <circle cx="455" cy="92" r="30" style="fill: var(--cadmium-yellow)" />
+                <g style="fill: var(--happy-little-cloud)">
+                  <ellipse cx="120" cy="70" rx="46" ry="14" /><ellipse cx="150" cy="60" rx="34" ry="14" /><ellipse cx="95" cy="62" rx="24" ry="10" />
+                  <ellipse cx="330" cy="46" rx="38" ry="11" /><ellipse cx="355" cy="38" rx="24" ry="10" />
+                </g>
+                <path d="M0 232 C 90 180, 170 200, 250 214 S 430 170, 600 222 V 260 H 0 Z" style="fill: var(--distant-hills)" />
+                <path d="M150 250 L 300 92 L 362 158 L 400 128 L 520 250 Z" style="fill: var(--almighty-mountain)" />
+                <path d="M300 92 L 262 132 L 285 124 L 300 140 L 318 122 L 340 136 Z" style="fill: var(--titanium-white)" />
+                <path d="M400 128 L 380 150 L 396 146 L 408 156 L 420 148 Z" style="fill: var(--titanium-white)" />
+                <rect y="250" width="600" height="110" style="fill: var(--still-water)" />
+                <path d="M0 286 C 120 262, 220 300, 340 292 S 520 276, 600 300 V 360 H 0 Z" style="fill: var(--sap-green)" />
+                <g>
+                  <rect x="58" y="262" width="7" height="34" style="fill: var(--van-dyke-brown)" />
+                  <path d="M61 190 L 92 268 H 30 Z" style="fill: var(--happy-little-tree)" />
+                  <rect x="108" y="270" width="6" height="28" style="fill: var(--van-dyke-brown)" />
+                  <path d="M111 214 L 136 276 H 86 Z" style="fill: var(--happy-little-tree)" />
+                  <rect x="516" y="266" width="7" height="34" style="fill: var(--van-dyke-brown)" />
+                  <path d="M519 198 L 548 272 H 490 Z" style="fill: var(--happy-little-tree)" />
+                </g>
+                <g>
+                  <rect x="408" y="268" width="50" height="30" style="fill: var(--van-dyke-brown)" />
+                  <path d="M402 270 L 433 248 L 464 270 Z" style="fill: var(--almighty-mountain)" />
+                  <rect x="428" y="280" width="10" height="18" style="fill: var(--cadmium-yellow)" />
+                </g>
+              </svg>
+              <figcaption>Painted with the tokens in <code>tokens.css</code>. Every shape is a <code>var()</code>.</figcaption>
+            </figure>
+          </div>
+
+          <div class="dock">
+            <div class="dock-scroll"><div id="swatch-demo" style="height: 100%"></div></div>
+          </div>
+        </div>
+
+        <section id="file">
+          <h2>Nothing is saved until you press Save.</h2>
+          <p class="sub">Edits preview on the page as you type. When you save, Swatch changes that one value in your stylesheet and leaves every other byte alone: comments, spacing and order stay yours. This is the file behind this page; save an edit and watch the line change.</p>
+          <div class="card file">
+            <div class="file-name"><span>tokens.css</span><span id="file-note">as it was written</span></div>
+            <pre id="file-text" tabindex="0" aria-label="tokens.css"></pre>
+          </div>
+        </section>
+
+        <section id="install">
+          <h2>Install</h2>
+          <p class="sub">Three steps, and no configuration. It only runs in development: a production build never contains it.</p>
+          <ol class="steps">
+            <li class="card">
+              <h3>Add the package</h3>
+              <p>As a dev dependency.</p>
+              <pre><code>npm install swatch -D</code></pre>
+            </li>
+            <li class="card">
+              <h3>Add the plugin</h3>
+              <p>One line in your Vite config.</p>
+<pre><code>// vite.config.ts
+import swatch from "swatch/vite"
+
+export default {
+  plugins: [swatch()],
+}</code></pre>
+            </li>
+            <li class="card">
+              <h3>Start your dev server</h3>
+              <p>Swatch sits in the bottom-left corner. It has already found your stylesheets and listed their colour tokens, light and dark.</p>
+              <pre><code>npm run dev</code></pre>
+            </li>
+          </ol>
+        </section>
+
+        <section id="features">
+          <h2>Features</h2>
+          <p class="sub">Everything below is in the panel at the top of this page.</p>
+          <div class="features">
+            <div class="card"><h3>Live preview</h3><p>Every edit shows on your real app as you type. Reset takes back everything, saved or not.</p></div>
+            <div class="card"><h3>Light and dark, side by side</h3><p>Each token's two values in one row, read from <code>.dark</code>, <code>[data-theme]</code> or the system preference.</p></div>
+            <div class="card"><h3>Inspect</h3><p>Hover the page to see the tokens behind any element. Click to filter the list to them; shift-click to add more.</p></div>
+            <div class="card"><h3>Contrast</h3><p>Each foreground shows its WCAG ratio against its surface, and Inspect checks any text on the page.</p></div>
+            <div class="card"><h3>A real colour picker</h3><p>With alpha, in HEX, RGB, HSL or OKLCH. Switching format never loses the colour.</p></div>
+            <div class="card"><h3>Token references</h3><p>Type <code>-</code> in a value to search your tokens and insert <code>var(--name)</code>. Aliases show what they resolve to.</p></div>
+            <div class="card"><h3>Uses</h3><p>How many times each token is used across your project, by file. Zero means it is safe to delete.</p></div>
+            <div class="card"><h3>Works with your agent</h3><p>A built-in MCP server lets a coding agent read your tokens, commit what you saved, and send colours back for you to preview.</p></div>
+          </div>
+        </section>
+
+        <section id="faq">
+          <h2>FAQ</h2>
+          <p class="sub"></p>
+          <div class="faq">
+            <details><summary>Does it ship to production?</summary><p>No. The plugin only applies to Vite's dev server. A production build has no panel, no script and no route from it.</p></details>
+            <details><summary>How does it find my tokens?</summary><p>It reads your stylesheets for custom properties declared on <code>:root</code> or <code>html</code>, in Tailwind's <code>@theme</code>, and on your dark selector. It lists the ones whose values are colours, as the browser reads them. You can name the stylesheet yourself with the <code>css</code> option.</p></details>
+            <details><summary>Will it reformat my CSS?</summary><p>No. Your stylesheet is parsed, the one declaration is changed, and the file is written back with everything else byte for byte the same. A value that would break the file, like an unclosed bracket, is refused before anything is written.</p></details>
+            <details><summary>Does it work with Tailwind?</summary><p>Yes. Tokens in <code>@theme</code> are listed, and utilities like <code>bg-card</code> or <code>text-brand/60</code> are counted as uses of their token.</p></details>
+            <details><summary>Do I need React?</summary><p>No. The panel runs in a shadow root with its own copy of React, so it works the same in React, Vue, Svelte, Solid or plain HTML, and your app's CSS can't restyle it.</p></details>
+            <details><summary>Which frameworks does it support?</summary><p>Any app served by Vite. Where the framework renders the HTML itself, such as SvelteKit, Astro or Remix, you add one script tag to your root layout in development. Next.js is not supported yet.</p></details>
+            <details><summary>What happens if I make a mistake?</summary><p>There are no mistakes here. Nothing touches your file until you press Save, and Reset puts back everything the tab has saved.</p></details>
+            <details><summary>How does it work with a coding agent?</summary><p>Run <code>npx swatch mcp</code> as an MCP server in your agent. From the panel you can then ask it to commit what you saved, or to pull colours from a Figma file. What the agent sends back loads as unsaved edits, so you see every value on the page first.</p></details>
+            <details><summary>Is it free?</summary><p>Yes. Swatch is open source under the MIT licence.</p></details>
+          </div>
+        </section>
+      </main>
+
+      <footer>
+        <span>Swatch · MIT licence</span>
+        <span>Every colour on this page is a token. Go on, change one.</span>
+      </footer>
+    </div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

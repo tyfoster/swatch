@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Swatch example</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Swatch example</h1>
+      <p class="muted">A page with a handful of colour tokens. Open Swatch in the bottom-left corner.</p>
+      <div class="card">
+        <h2>A card</h2>
+        <p>Its background is <code>--card</code>, its text <code>--card-foreground</code>.</p>
+        <button class="primary">Primary</button>
+        <button id="theme">Toggle dark</button>
+      </div>
+    </main>
+    <script type="module">
+      document.getElementById("theme").addEventListener("click", () => document.documentElement.classList.toggle("dark"))
+    </script>
+  </body>
+</html>
