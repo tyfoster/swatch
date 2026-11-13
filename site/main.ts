@@ -1,51 +1,63 @@
-// The website runs the real panel on itself: tokens.css is the stylesheet
+// The website runs the real tool on itself: tokens.css is the stylesheet
 // Swatch edits, held in the page instead of on a disk.
 import { mountDemo } from "../src/client/demo.tsx"
+import { HEIGHT, PITCH, ROWS, SIZE, WIDTH } from "./logo.ts"
 import siteCss from "./site.css?raw"
 import tokens from "./tokens.css?raw"
 
-const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T
-
-// the file, shown as it stands; lines a save changed are marked
-const original = tokens.split("\n")
-function showFile(css: string) {
-  const pre = $("file-text")
-  const lines = css.replace(/\n$/, "").split("\n")
-  pre.replaceChildren(...lines.map((line, i) => {
-    const span = document.createElement("span")
-    span.textContent = line || " "
-    if (line !== original[i]) span.className = "changed"
-    return span
-  }))
-  const n = lines.filter((line, i) => line !== original[i]).length
-  $("file-note").textContent = n ? `${n} line${n === 1 ? "" : "s"} changed by Swatch` : "as it was written"
-  if (n) pre.querySelector(".changed")?.scrollIntoView({ block: "nearest" })
+// ── the logo ──
+// One <g> per column of squares; the group carries the animated fill and
+// its squares inherit it. Each column starts the shared animation further
+// along (a negative delay), so at any moment the five tokens read left to
+// right as a gradient, and it flows.
+const NS = "http://www.w3.org/2000/svg"
+const DURATION = 14 // seconds; matches .logo g in site.css
+const SPREAD = 0.8 // of the cycle laid across the logo: blue at the left edge, crimson at the right
+const logo = document.getElementById("logo")!
+const columns = new Map<number, SVGGElement>()
+for (const [y, runs] of ROWS) for (const [x0, n] of runs) for (let i = 0; i < n; i++) {
+  const x = x0 + i * PITCH
+  const col = Math.round(x / PITCH)
+  let g = columns.get(col)
+  if (!g) {
+    g = document.createElementNS(NS, "g")
+    g.style.animationDelay = `${(-(col * PITCH) / WIDTH * SPREAD * DURATION).toFixed(2)}s`
+    columns.set(col, g)
+    logo.appendChild(g)
+  }
+  const rect = document.createElementNS(NS, "rect")
+  rect.setAttribute("x", String(x))
+  rect.setAttribute("y", String(y))
+  rect.setAttribute("width", String(SIZE))
+  rect.setAttribute("height", String(SIZE))
+  rect.setAttribute("rx", "1")
+  g.appendChild(rect)
 }
-showFile(tokens)
+logo.setAttribute("viewBox", `0 0 ${WIDTH} ${HEIGHT}`)
 
+// ── the tool, in the bottom-left corner, as it sits in an app ──
 mountDemo({
-  target: $("swatch-demo"),
   file: "tokens.css",
   css: tokens,
-  // where the tokens are used: the page's own styles, and its markup (the painting)
-  sources: { "site.css": siteCss, "index.html": document.documentElement.outerHTML },
+  // where the tokens are used: the page's own styles
+  sources: { "site.css": siteCss },
   groups: [
-    ["The page", "^--(canvas|happy-little-cloud|soft-spoken|phthalo-blue|wet-on-wet|happy-accident)"],
-    ["The painting", "."],
+    ["The page", "^--(canvas|liquid-white|happy-little-cloud|midnight-black|soft-spoken|wet-on-wet)$"],
+    ["The code", "^--(plain-code|quiet-comment|mighty-keyword|friendly-string|happy-little-function)$"],
+    ["The logo", "."],
   ],
-  onSave: showFile,
 })
 
-// the page's own light/dark switch
-const theme = $<HTMLButtonElement>("theme")
-const label = () => { theme.textContent = document.documentElement.classList.contains("dark") ? "Light" : "Dark" }
-theme.addEventListener("click", () => document.documentElement.classList.toggle("dark"))
-new MutationObserver(label).observe(document.documentElement, { attributes: true, attributeFilter: ["class"] })
-label()
-
-// copy the install command
-$("copy").addEventListener("click", async () => {
-  const copy = $("copy")
-  try { await navigator.clipboard.writeText($("cmd").textContent ?? ""); copy.textContent = "Copied" } catch { copy.textContent = "Press ⌘C" }
-  setTimeout(() => { copy.textContent = "Copy" }, 1600)
-})
+// ── copy buttons ──
+const COPY = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg>'
+const DONE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>'
+for (const button of document.querySelectorAll<HTMLButtonElement>(".copy")) {
+  button.innerHTML = COPY
+  button.addEventListener("click", async () => {
+    const text = button.parentElement?.querySelector("code")?.textContent ?? ""
+    try { await navigator.clipboard.writeText(text) } catch { return }
+    button.innerHTML = DONE
+    button.dataset.done = ""
+    setTimeout(() => { button.innerHTML = COPY; delete button.dataset.done }, 1500)
+  })
+}

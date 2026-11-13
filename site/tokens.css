@@ -1,45 +1,45 @@
-/* The colours of this page. Swatch, on the right, is editing this file. */
+/* Every colour on this page. Swatch, bottom left, is editing this file. */
 :root {
   /* the page */
-  --canvas: #f6f1e7;
-  --canvas-foreground: #2a2622;
-  --happy-little-cloud: #ffffff; /* cards, and the clouds */
-  --happy-little-cloud-foreground: var(--canvas-foreground);
-  --soft-spoken-foreground: #6b6358;
-  --phthalo-blue: #123f8c; /* buttons and links */
-  --phthalo-blue-foreground: #ffffff;
-  --wet-on-wet: rgba(42, 38, 34, 0.14); /* borders */
-  --happy-accident: #b93a0a; /* there are no mistakes */
+  --canvas: #ebecf0;
+  --liquid-white: #ffffff; /* code blocks */
+  --happy-little-cloud: #fafafa; /* the video's frame */
+  --midnight-black: #0c1024; /* titles */
+  --soft-spoken: #414a63; /* paragraphs */
+  --wet-on-wet: rgba(12, 16, 36, 0.08); /* borders */
 
-  /* the painting */
-  --sky: #8fbde3;
-  --sky-glow: #f6dcb4;
-  --cadmium-yellow: #f2b632; /* the sun */
-  --almighty-mountain: #55668a;
-  --titanium-white: #fbfbf8; /* snow */
-  --distant-hills: color-mix(in oklch, var(--almighty-mountain), var(--sky) 55%);
-  --still-water: #6f9fc4;
-  --sap-green: #3f6b3a;
-  --happy-little-tree: var(--sap-green);
-  --van-dyke-brown: #4a3526; /* trunks, and the cabin */
+  /* the code */
+  --plain-code: #1f2540;
+  --quiet-comment: #8a90a6;
+  --mighty-keyword: #7c3aed;
+  --friendly-string: #0f766e;
+  --happy-little-function: #2563eb;
+
+  /* the logo: the paints its gradient runs through */
+  --phthalo-blue: #3b82f6;
+  --ultramarine: #4f46e5;
+  --dioxazine-purple: #7c3aed;
+  --quinacridone-magenta: #c026d3;
+  --alizarin-crimson: #e11d48;
 }
 
 .dark {
-  --canvas: #14151a;
-  --canvas-foreground: #ece8df;
-  --happy-little-cloud: #1e2027;
-  --soft-spoken-foreground: #a39d91;
-  --phthalo-blue: #86adf7;
-  --phthalo-blue-foreground: #0d1422;
-  --wet-on-wet: rgba(236, 232, 223, 0.14);
-  --happy-accident: #fb923c;
+  --canvas: #101117;
+  --liquid-white: #181a22;
+  --happy-little-cloud: #15171e;
+  --midnight-black: #f1f2f6;
+  --soft-spoken: #a4a9ba;
+  --wet-on-wet: rgba(241, 242, 246, 0.1);
 
-  --sky: #111a33;
-  --sky-glow: #2d2b4d;
-  --cadmium-yellow: #f4ecd0; /* the moon */
-  --almighty-mountain: #2b3450;
-  --titanium-white: #c9d3e6;
-  --still-water: #1a2947;
-  --sap-green: #1d3a2a;
-  --van-dyke-brown: #241a14;
+  --plain-code: #dfe2ee;
+  --quiet-comment: #7b8198;
+  --mighty-keyword: #b794f6;
+  --friendly-string: #5eead4;
+  --happy-little-function: #7fb0ff;
+
+  --phthalo-blue: #60a5fa;
+  --ultramarine: #818cf8;
+  --dioxazine-purple: #a78bfa;
+  --quinacridone-magenta: #e879f9;
+  --alizarin-crimson: #fb7185;
 }

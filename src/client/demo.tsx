@@ -9,8 +9,9 @@ import { Playground } from "./panel.tsx"
 import { makeHost } from "./shell.ts"
 
 export type Demo = {
-  /** where the panel goes; it fills this element */
-  target: HTMLElement
+  /** where the panel goes, docked and always open; left out, it floats in
+   *  the bottom-left corner behind its launcher, as it does in an app */
+  target?: HTMLElement
   /** the stylesheet's name, as the panel shows it */
   file: string
   /** the stylesheet's text */
@@ -62,8 +63,10 @@ export function mountDemo({ target, file, css, sources = {}, groups, onSave }: D
   }
 
   const { host, mountAt } = makeHost()
-  host.style.display = "block"
-  host.style.height = "100%"
-  target.appendChild(host)
-  createRoot(mountAt).render(<Playground backend={backend} docked />)
+  if (target) {
+    host.style.display = "block"
+    host.style.height = "100%"
+    target.appendChild(host)
+  } else document.body.appendChild(host)
+  createRoot(mountAt).render(<Playground backend={backend} docked={!!target} />)
 }
