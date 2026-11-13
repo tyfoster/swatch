@@ -9,7 +9,7 @@ await build({
   bundle: true,
   platform: "node",
   format: "esm",
-  target: "node22",
+  target: "node20",
   packages: "external",
 })
 await build({
@@ -18,7 +18,7 @@ await build({
   bundle: true,
   platform: "node",
   format: "esm",
-  target: "node22",
+  target: "node20",
   packages: "external",
   banner: { js: "#!/usr/bin/env node" },
 })
