@@ -27,6 +27,8 @@ export type Token = {
   name: string; light?: string; dark?: string
   /** the stylesheet each value is in, from the project root */
   file: string
+  /** how its stylesheet selects the dark theme, where that differs from the project's */
+  darkAt?: DarkSelector
   uses: { file: string; n: number }[]
 }
 export type Sheet = {
@@ -137,18 +139,31 @@ export class Project {
   read(): Sheet {
     const files = this.stylesheets()
     const tokens = new Map<string, Token>()
-    let dark: DarkSelector | null = null
+    // Stylesheets need not agree on how dark is selected (a class in one,
+    // the system's preference in another). The project's is the one most
+    // dark values sit under; a token under another carries its own.
+    const key = (d: DarkSelector | null) => d ? `${d.media ?? ""}|${d.selector}` : ""
+    const darkOf = new Map<string, DarkSelector | null>() // token → its stylesheet's
+    const votes = new Map<string, { dark: DarkSelector; n: number }>()
     for (const file of files) {
       let sheet
       try { sheet = readSheet(file) } catch (err) { console.warn(`[swatch] could not read ${file}: ${err}`); continue }
-      dark ??= sheet.dark
       for (const [name, v] of sheet.tokens) {
         // a later file's value is the one the cascade usually ends on
         const t = tokens.get(name) ?? { name, file: relative(this.root, file), uses: [] }
         if (v.light !== undefined) { t.light = v.light; t.file = relative(this.root, file) }
-        if (v.dark !== undefined) t.dark = v.dark
+        if (v.dark !== undefined) {
+          t.dark = v.dark
+          darkOf.set(name, sheet.dark)
+          if (sheet.dark) { const k = key(sheet.dark); votes.set(k, { dark: sheet.dark, n: (votes.get(k)?.n ?? 0) + 1 }) }
+        } else if (!darkOf.has(name)) darkOf.set(name, sheet.dark)
         tokens.set(name, t)
       }
+    }
+    const dark = [...votes.values()].sort((a, b) => b.n - a.n)[0]?.dark ?? [...darkOf.values()].find(Boolean) ?? null
+    for (const t of tokens.values()) {
+      const own = darkOf.get(t.name)
+      if (own && key(own) !== key(dark)) t.darkAt = own
     }
     if (!watching || listed?.dir !== this.src) listed = { dir: this.src, files: walk(this.src, SOURCE) }
     for (const path of listed.files) {

@@ -2,14 +2,20 @@
 // server that is the Vite plugin, over HTTP; on the website it is the page
 // itself (demo.ts), with the same reader and writer running in the browser.
 export type Theme = "light" | "dark"
-export type Token = { name: string; light?: string; dark?: string; file?: string; uses: { file: string; n: number }[]; isNew?: boolean }
+export type Dark = { selector: string; media: string | null }
+export type Token = {
+  name: string; light?: string; dark?: string; file?: string
+  /** how its stylesheet selects the dark theme, where that differs from the project's */
+  darkAt?: Dark
+  uses: { file: string; n: number }[]; isNew?: boolean
+}
 export type Edit = { name: string; theme: Theme; value: string }
 export type Change = { name: string; theme: Theme; from: string | null; to: string | null }
 /** The stylesheets, their tokens, how the dark theme is selected, the
  *  project's own section titles (if it set any), and whether a coding
  *  agent is listening for requests. */
 export type Sheet = {
-  files: string[]; tokens: Token[]; dark: { selector: string; media: string | null } | null
+  files: string[]; tokens: Token[]; dark: Dark | null
   groups: [string, string][] | null; agent: boolean; changes?: Change[]
 }
 

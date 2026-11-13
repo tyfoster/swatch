@@ -117,3 +117,17 @@ ok(usesOf('<a className="bg-brand text-brand/60" />', "@theme { --color-brand: #
   try { project.write([{ theme: "light", name: "--z", value: "white" }, { theme: "light", name: "--a", value: "url(" }]) } catch { refused = true }
   ok(refused && readFileSync(join(d3, "b.css"), "utf8") === ":root { --z: grey; }\n", "one bad edit in a batch leaves every file untouched")
 }
+
+// stylesheets that select dark differently: the project's is the one most
+// dark values sit under, and a token under another says so
+{
+  const d4 = join(dir, "mixed"); mkdirSync(d4)
+  writeFileSync(join(d4, "a.css"), "@media (prefers-color-scheme: dark) { :root { --warn: orange; } }\n:root { --warn: brown; }\n")
+  writeFileSync(join(d4, "b.css"), ':root { --bg: white; --fg: black; }\n[data-theme="dark"] { --bg: black; --fg: white; }\n')
+  const sheet = new Project(d4).read()
+  const tok = new Map(sheet.tokens.map((t) => [t.name, t]))
+  ok(sheet.dark?.selector === '[data-theme="dark"]' && sheet.dark.media === null, "the project's dark selector is the one most dark values use")
+  ok(tok.get("--warn")?.darkAt?.media === "(prefers-color-scheme: dark)", "a token whose stylesheet selects dark another way carries that")
+  ok(tok.get("--bg")?.darkAt === undefined, "…and the rest carry nothing")
+}
+

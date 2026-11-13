@@ -106,8 +106,15 @@ function grouping(sheet: Sheet | null): Grouping {
  *  query), after it. */
 function css(edits: Edits, deleted: string[], find: string | null, saved: Token[], dark: Sheet["dark"]) {
   const light: string[] = []
-  const darks: string[] = []
+  // dark declarations by the rule they go in: the project's dark selector,
+  // or a token's own where its stylesheet selects dark another way
+  const darks = new Map<string, string[]>()
   const byName = new Map(saved.map((t) => [t.name, t]))
+  const ruleOf = (d: Sheet["dark"]) => d?.media ? `@media ${d.media}{:root{…}}` : `${d?.selector ?? ".dark"}{…}`
+  const main = ruleOf(dark)
+  darks.set(main, [])
+  for (const t of saved) if (t.darkAt && !darks.has(ruleOf(t.darkAt))) darks.set(ruleOf(t.darkAt), [])
+  const putDark = (name: string, decl: string) => darks.get(ruleOf(byName.get(name)?.darkAt ?? dark))!.push(decl)
   for (const [name, e] of Object.entries(edits)) {
     if (deleted.includes(name)) continue
     const t = byName.get(name)
@@ -117,24 +124,21 @@ function css(edits: Edits, deleted: string[], find: string | null, saved: Token[
       light.push(`${name}: ${e.light};`)
       // this :root rule comes after the file's dark rule, so a token the
       // dark theme declares keeps its dark value by saying it again here
-      if (e.dark === undefined && t?.dark !== undefined) darks.push(`${name}: ${t.dark};`)
+      if (e.dark === undefined && t?.dark !== undefined) putDark(name, `${name}: ${t.dark};`)
     }
     if (e.dark !== undefined) {
       // an emptied dark value is a save that removes the declaration, so the
       // dark theme inherits the light one: previewed as that light value
       const v = e.dark !== "" ? e.dark : (e.light || t?.light)
-      if (v && wellFormed(v)) darks.push(`${name}: ${v};`)
+      if (v && wellFormed(v)) putDark(name, `${name}: ${v};`)
       // a token with no light value has nothing to inherit: emptied, it is unset
-      else if (!v) darks.push(`${name}: initial;`)
+      else if (!v) putDark(name, `${name}: initial;`)
     }
   }
   // a deleted token previews as unset: every var() on it falls back
-  for (const name of deleted) { light.push(`${name}: initial;`); darks.push(`${name}: initial;`) }
-  if (find) { light.push(`${find}: ${FIND} !important;`); darks.push(`${find}: ${FIND} !important;`) }
-  const darkRule = dark?.media
-    ? `@media ${dark.media}{:root{${darks.join("")}}}`
-    : `${dark?.selector ?? ".dark"}{${darks.join("")}}`
-  return `:root{${light.join("")}}\n${darkRule}`
+  for (const name of deleted) { light.push(`${name}: initial;`); putDark(name, `${name}: initial;`) }
+  if (find) { light.push(`${find}: ${FIND} !important;`); for (const d of darks.values()) d.push(`${find}: ${FIND} !important;`) }
+  return [`:root{${light.join("")}}`, ...[...darks].map(([rule, decls]) => rule.replace("…", decls.join("")))].join("\n")
 }
 
 /** Whether the page is showing the dark theme, and a way to flip it for a
