@@ -27,8 +27,8 @@ body {
 /* still, for anyone who asked for less motion: each column keeps the colour it starts on */
 @media (prefers-reduced-motion: reduce) { .logo g { animation-play-state: paused; } }
 
-/* the logo as a split-flap sign (logo-flap.ts): twelve flaps in a row, the
-   six letters in the middle and three colours either side. Each is two halves with a
+/* the logo as a split-flap sign (logo-flap.ts): twelve flaps in a row, six
+   for the letters, one blank, five for colours. Each is two halves with a
    hairline of page between them. */
 .sign { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 8px; aspect-ratio: 8.5; margin: 0 0 64px; cursor: pointer; user-select: none; }
 .flap { position: relative; perspective: 500px; container-type: inline-size; }
@@ -93,5 +93,11 @@ p:last-child { margin-bottom: 0; }
   /* on a small screen the sign is its six letters */
   .sign { grid-template-columns: repeat(6, minmax(0, 1fr)); aspect-ratio: 4.2; gap: 6px; }
   .flap.extra { display: none; }
+  /* …each on its own colour: the five chart tokens, and the H on black */
+  .flap[data-letter="1"] .half { background: var(--chart-1); }
+  .flap[data-letter="2"] .half { background: var(--chart-2); }
+  .flap[data-letter="3"] .half { background: var(--chart-3); }
+  .flap[data-letter="4"] .half { background: var(--chart-4); }
+  .flap[data-letter="5"] .half { background: var(--chart-5); }
   .cols { grid-template-columns: 1fr; }
 }
