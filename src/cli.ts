@@ -1,4 +1,4 @@
-// `swatch mcp [--root <dir>] [--css <file>[,<file>]] [--src <dir>]`
+// `npx @tyfoster/swatch mcp [--root <dir>] [--css <file>[,<file>]] [--src <dir>]`
 import { readFileSync } from "node:fs"
 import { serve } from "./mcp.ts"
 
@@ -15,9 +15,9 @@ if (args[0] === "mcp") {
   console.error(`swatch ${version}
 
 Usage:
-  swatch mcp [--root <dir>] [--css <file>[,<file>]] [--src <dir>]
+  npx @tyfoster/swatch mcp [--root <dir>] [--css <file>[,<file>]] [--src <dir>]
       Run the MCP server for a coding agent, from the project root.
 
-The panel itself is a Vite plugin: import swatch from "swatch/vite".`)
+The panel itself is a Vite plugin: import swatch from "@tyfoster/swatch/vite".`)
   process.exit(args.length ? 1 : 0)
 }

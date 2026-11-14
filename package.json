@@ -1,5 +1,5 @@
 {
-  "name": "swatch",
+  "name": "@tyfoster/swatch",
   "version": "0.1.0",
   "description": "Edit your CSS colour tokens live, on the page. A dev-only panel for Vite that finds the custom properties in your stylesheets, previews edits on the real app, and writes them back to the file.",
   "keywords": [
@@ -61,5 +61,8 @@
   },
   "bin": {
     "swatch": "./dist/cli.js"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
