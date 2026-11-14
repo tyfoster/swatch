@@ -1,6 +1,6 @@
 // Draws the SWATCH wordmark's squares and writes logo.ts.
-//   node site/logo-gen.mjs          writes site/logo.ts
-//   node site/logo-gen.mjs --lab    also writes site/logo-lab.html, the variants side by side
+//   node site/logo-gen.mjs [version]   writes site/logo.ts (the version named, or CURRENT)
+//   node site/logo-gen.mjs --lab       also writes site/logo-lab.html, every version side by side
 //
 // Squares are 9px on an 11px pitch, 12 rows. S, T, C and H are upright
 // blocks. W and A are drawn from slanted strokes. How far a stroke leans
@@ -20,16 +20,21 @@ const block = (lines) => lines.map((line) => {
   }
   return runs
 })
-const S = block([
-  "###########", "###########", "#####.#####", "#####.#####", "#####......", "###########",
-  "###########", "......#####", "#####.#####", "#####.#####", "###########", "###########",
-])
-const T = block(["###########", "###########", ...Array(10).fill("...#####...")])
-const C = block([
-  "###########", "###########", "#####.#####", "#####.#####", "#####.#####", "#####......",
-  "#####......", "#####.#####", "#####.#####", "#####.#####", "###########", "###########",
-])
-const H = block([...Array(5).fill("#####..#####"), "############", ...Array(6).fill("#####..#####")])
+/** The upright letters, for a stem `a` squares wide and a counter `g`
+ *  squares wide. Their bars are two rows thick. */
+function uprights(a, g, { tWidth = 2 * a + g, hBar = 1 } = {}) {
+  const full = "#".repeat(2 * a + g), both = "#".repeat(a) + ".".repeat(g) + "#".repeat(a)
+  const leftOnly = "#".repeat(a) + ".".repeat(a + g), rightOnly = ".".repeat(a + g) + "#".repeat(a)
+  const side = (tWidth - a) / 2
+  const stem = ".".repeat(side) + "#".repeat(a) + ".".repeat(side)
+  const bar = hBar === 2 ? [5, 6] : [5]
+  return {
+    S: block([full, full, both, both, leftOnly, full, full, rightOnly, both, both, full, full]),
+    T: block(["#".repeat(tWidth), "#".repeat(tWidth), ...Array(10).fill(stem)]),
+    C: block([full, full, both, both, both, leftOnly, leftOnly, both, both, both, full, full]),
+    H: (hGap = g) => block(Array.from({ length: ROWS }, (_, r) => bar.includes(r) ? "#".repeat(2 * a + hGap) : "#".repeat(a) + ".".repeat(hGap) + "#".repeat(a))),
+  }
+}
 
 /** How far a slanted stroke has moved sideways by row r. */
 const lean = {
@@ -99,34 +104,50 @@ function word(letters) {
 // S-W and T-C keep the original drawing's spacing. W-A and A-T are set by
 // their closest row: KERN between them, the space between the C and the H.
 const KERN = 20
-const build = (w, a) => word([[S, 0], [w, 11], [a, { kern: KERN }], [T, { kern: KERN }], [C, 14], [H, KERN]])
+const build = ({ S, T, C, H }, w, a) => word([[S, 0], [w, 11], [a, { kern: KERN }], [T, { kern: KERN }], [C, 14], [H, KERN]])
 
-// Strokes three squares wide, leaning 4px a row: the A comes out exactly as
-// wide as the S (its feet land on the pitch), and the W about 1.4 times that.
-const LEAN = lean.line(4)
-const chosen = build(W(3, 6, LEAN), A(3, 8, LEAN))
+// ── Versions ─────────────────────────────────────────────────────────────
+// Each is kept: `node site/logo-gen.mjs v1` puts that one back on the page.
+const four = lean.line(4)
+const heavy = uprights(5, 1)
+const VERSIONS = {
+  // stems 5 wide and a one-row H bar; W and A 3 wide, leaning 4px a row
+  v1: () => build({ S: heavy.S, T: heavy.T, C: heavy.C, H: heavy.H(2) }, W(3, 6, four), A(3, 8, four)),
+  // lighter uprights to match the W and A: stems 4 wide with counters 3 wide, and a two-row H bar
+  v2: () => { const u = uprights(4, 3, { tWidth: 12, hBar: 2 }); return build({ ...u, H: u.H() }, W(3, 6, four), A(3, 8, four)) },
+  // as v2, with the W and A a square heavier and leaning 4.5px to keep their insides open
+  v3: () => { const u = uprights(4, 3, { tWidth: 12, hBar: 2 }), f = lean.line(4.5); return build({ ...u, H: u.H() }, W(4, 6, f), A(4, 8, f)) },
+  // everything 3 wide: stems, counters and diagonals
+  v4: () => { const u = uprights(3, 3, { hBar: 2 }); return build({ ...u, H: u.H() }, W(3, 6, four), A(3, 8, four)) },
+  // stems 4 wide with counters 2 wide: uprights as narrow as v1's, but lighter
+  v5: () => { const u = uprights(4, 2, { hBar: 2 }); return build({ ...u, H: u.H() }, W(3, 6, four), A(3, 8, four)) },
+}
+const CURRENT = "v4"
+const version = process.argv.slice(2).find((a) => a in VERSIONS) ?? CURRENT
+const chosen = VERSIONS[version]()
 const n = chosen.rows.flat().reduce((k, [, c]) => k + c, 0)
 writeFileSync(new URL("./logo.ts", import.meta.url), `// The SWATCH wordmark as squares: for each row (its y), runs of squares as
 // [x of the first, how many, their pitch where it is not the usual one].
 // Squares are ${SIZE}px on an ${PITCH}px pitch, in a ${chosen.width} by ${ROWS * PITCH - 2} box. ${n} squares in
-// all. Written by logo-gen.mjs: change the letters there, not here.
+// all. Version ${version}. Written by logo-gen.mjs: change the letters there, not here.
 export const WIDTH = ${chosen.width}, HEIGHT = ${ROWS * PITCH - 2}, SIZE = ${SIZE}, PITCH = ${PITCH}
 export const ROWS: [number, ([number, number] | [number, number, number])[]][] = [
 ${chosen.rows.map((runs, r) => `  [${r * PITCH}, ${JSON.stringify(runs)}],`).join("\n")}
 ]
 `)
-console.log(`logo.ts: ${n} squares, ${chosen.width} wide`)
+console.log(`logo.ts: version ${version}, ${n} squares, ${chosen.width} wide`)
 
 if (process.argv.includes("--lab")) {
   const svg = ({ rows, width: w }, label) => `<p>${label} (${w} wide)</p><svg viewBox="0 0 ${w} ${ROWS * PITCH - 2}" width="${w * 1.25}">${rows.map((runs, r) =>
     runs.map(([x, c, p = PITCH]) => Array.from({ length: c }, (_, i) => `<rect x="${+(x + i * p).toFixed(2)}" y="${r * PITCH}" width="9" height="9" rx="1"/>`).join("")).join("")).join("")}</svg>`
-  const third = lean.line(PITCH / 3), twoFifths = lean.line(PITCH * 0.4)
-  const variants = [
-    [build(W(3, 4), A(3, 8)), "A. half a pitch per row, strokes 3 wide, W peak 4 rows"],
-    [build(W(3, 6, twoFifths), A(3, 8, twoFifths)), "B. a straight lean of 0.4 pitch per row, strokes 3 wide, W peak 6"],
-    [build(W(3, 6, third), A(3, 8, third)), "C. a straight lean of a third of a pitch per row, strokes 3 wide, W peak 6"],
-    [build(W(3, 7, third), A(3, 8, third)), "D. as C, W peak 7"],
-  ]
+  const notes = {
+    v1: "v1 (kept): stems 5 wide, one-row H bar, W and A 3 wide",
+    v2: "v2: stems 4 wide, counters 3 wide, two-row H bar; W and A as v1",
+    v3: "v3: as v2, W and A 4 wide, leaning a little more",
+    v4: "v4: everything 3 wide",
+    v5: "v5: stems 4 wide, counters 2 wide; W and A as v1",
+  }
+  const variants = Object.keys(VERSIONS).map((k) => [VERSIONS[k](), notes[k]])
   writeFileSync(new URL("./logo-lab.html", import.meta.url), `<!doctype html><meta charset="utf-8"><title>logo lab</title>
 <style>body{margin:24px;background:#ebecf0;font:13px system-ui}svg{display:block;fill:#4f46e5;margin-bottom:20px}p{margin:0 0 6px}</style>
 ${variants.map(([v, l]) => svg(v, l)).join("\n")}`)
