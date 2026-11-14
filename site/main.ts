@@ -1,39 +1,50 @@
 // The website runs the real tool on itself: tokens.css is the stylesheet
 // Swatch edits, held in the page instead of on a disk.
 import { mountDemo } from "../src/client/demo.tsx"
+import { mountSign } from "./logo-flap.ts"
 import { HEIGHT, PITCH, ROWS, SIZE, WIDTH } from "./logo.ts"
 import siteCss from "./site.css?raw"
 import tokens from "./tokens.css?raw"
 
 // ── the logo ──
-// One <g> per column of squares; the group carries the animated fill and
+// Two versions are kept. The page shows the split-flap sign; add
+// ?logo=squares to the address for the wordmark of squares.
+const sign = document.getElementById("sign")!, squaresLogo = document.getElementById("logo")!
+if (new URLSearchParams(location.search).get("logo") === "squares") {
+  sign.hidden = true
+  squaresLogo.removeAttribute("hidden")
+  mountSquares(squaresLogo)
+} else mountSign(sign)
+
+// The squares: one <g> per column; the group carries the animated fill and
 // its squares inherit it. Each column starts the shared animation further
 // along (a negative delay), so at any moment the five tokens read left to
 // right as a gradient, and it flows.
-const NS = "http://www.w3.org/2000/svg"
-const DURATION = 14 // seconds; matches .logo g in site.css
-const SPREAD = 0.8 // of the cycle laid across the logo: --chart-1 at the left edge, --chart-5 at the right
-const logo = document.getElementById("logo")!
-const columns = new Map<number, SVGGElement>()
-for (const [y, runs] of ROWS) for (const [x0, n, pitch = PITCH] of runs) for (let i = 0; i < n; i++) {
-  const x = +(x0 + i * pitch).toFixed(2)
-  const col = Math.round(x / PITCH)
-  let g = columns.get(col)
-  if (!g) {
-    g = document.createElementNS(NS, "g")
-    g.style.animationDelay = `${(-(col * PITCH) / WIDTH * SPREAD * DURATION).toFixed(2)}s`
-    columns.set(col, g)
-    logo.appendChild(g)
+function mountSquares(logo: HTMLElement) {
+  const NS = "http://www.w3.org/2000/svg"
+  const DURATION = 14 // seconds; matches .logo g in site.css
+  const SPREAD = 0.8 // of the cycle laid across the logo: --chart-1 at the left edge, --chart-5 at the right
+  const columns = new Map<number, SVGGElement>()
+  for (const [y, runs] of ROWS) for (const [x0, n, pitch = PITCH] of runs) for (let i = 0; i < n; i++) {
+    const x = +(x0 + i * pitch).toFixed(2)
+    const col = Math.round(x / PITCH)
+    let g = columns.get(col)
+    if (!g) {
+      g = document.createElementNS(NS, "g")
+      g.style.animationDelay = `${(-(col * PITCH) / WIDTH * SPREAD * DURATION).toFixed(2)}s`
+      columns.set(col, g)
+      logo.appendChild(g)
+    }
+    const rect = document.createElementNS(NS, "rect")
+    rect.setAttribute("x", String(x))
+    rect.setAttribute("y", String(y))
+    rect.setAttribute("width", String(SIZE))
+    rect.setAttribute("height", String(SIZE))
+    rect.setAttribute("rx", "1")
+    g.appendChild(rect)
   }
-  const rect = document.createElementNS(NS, "rect")
-  rect.setAttribute("x", String(x))
-  rect.setAttribute("y", String(y))
-  rect.setAttribute("width", String(SIZE))
-  rect.setAttribute("height", String(SIZE))
-  rect.setAttribute("rx", "1")
-  g.appendChild(rect)
+  logo.setAttribute("viewBox", `0 0 ${WIDTH} ${HEIGHT}`)
 }
-logo.setAttribute("viewBox", `0 0 ${WIDTH} ${HEIGHT}`)
 
 // ── the tool, in the bottom-left corner, as it sits in an app ──
 mountDemo({
@@ -44,7 +55,7 @@ mountDemo({
   groups: [
     ["Base", "^--(background|foreground|primary|border|ring)$"],
     ["Surfaces", "^--(card|muted|accent)"],
-    ["Chart: the logo", "^--chart-"],
+    ["Chart: the sign's colours", "^--chart-"],
   ],
 })
 

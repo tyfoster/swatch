@@ -27,6 +27,29 @@ body {
 /* still, for anyone who asked for less motion: each column keeps the colour it starts on */
 @media (prefers-reduced-motion: reduce) { .logo g { animation-play-state: paused; } }
 
+/* the logo as a split-flap sign (logo-flap.ts): twelve flaps in a row, six
+   for the letters, one blank, five for colours. Each is two halves with a
+   hairline of page between them. */
+.sign { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 8px; aspect-ratio: 8.5; margin: 0 0 64px; cursor: pointer; user-select: none; }
+.flap { position: relative; perspective: 500px; container-type: inline-size; }
+.flap .half { position: absolute; left: 0; right: 0; height: calc(50% - 1px); overflow: hidden; background: var(--foreground); color: var(--background); }
+.flap .top { top: 0; border-radius: 7% 7% 2px 2px / 10% 10% 2px 2px; }
+.flap .bottom { bottom: 0; border-radius: 2px 2px 7% 7% / 2px 2px 10% 10%; }
+/* each half is a window on a card twice its height: the top half shows its upper part, the bottom its lower */
+.flap .half span { position: absolute; left: 0; right: 0; height: calc(200% + 2px); display: grid; place-items: center; font: 700 96cqw/1 "Helvetica Neue", Helvetica, Arial, sans-serif; letter-spacing: -0.02em; }
+.flap .top span { top: 0; }
+.flap .bottom span { bottom: 0; }
+.flap .leaf { backface-visibility: hidden; }
+.flap .falling { transform-origin: bottom; }
+.flap .landing { transform-origin: top; transform: rotateX(90deg); }
+/* the colour cards: the five chart tokens */
+.flap .half[data-colour="1"] { background: var(--chart-1); }
+.flap .half[data-colour="2"] { background: var(--chart-2); }
+.flap .half[data-colour="3"] { background: var(--chart-3); }
+.flap .half[data-colour="4"] { background: var(--chart-4); }
+.flap .half[data-colour="5"] { background: var(--chart-5); }
+[hidden] { display: none !important; }
+
 /* two columns */
 .cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.96fr); gap: 32px 48px; }
 /* the left column is as tall as the right, and its last item (the GitHub link) sits on its bottom edge */
@@ -66,6 +89,9 @@ p:last-child { margin-bottom: 0; }
 
 @media (max-width: 860px) {
   .wrap { padding-top: 36px; }
-  .logo { margin-bottom: 40px; }
+  .logo, .sign { margin-bottom: 40px; }
+  /* on a small screen the sign is its six letters */
+  .sign { grid-template-columns: repeat(6, minmax(0, 1fr)); aspect-ratio: 4.2; gap: 6px; }
+  .flap.extra { display: none; }
   .cols { grid-template-columns: 1fr; }
 }
