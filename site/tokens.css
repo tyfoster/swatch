@@ -1,45 +1,42 @@
-/* Every colour on this page. Swatch, bottom left, is editing this file. */
+/* Every colour on this page, under the names shadcn/ui uses. Swatch, bottom
+   left, is editing this file. */
 :root {
-  /* the page */
-  --canvas: #ebecf0;
-  --liquid-white: #ffffff; /* code blocks */
-  --happy-little-cloud: #fafafa; /* the video's frame */
-  --midnight-black: #0c1024; /* titles */
-  --soft-spoken: #414a63; /* paragraphs */
-  --wet-on-wet: rgba(12, 16, 36, 0.08); /* borders */
+  --background: #ebecf0;
+  --foreground: #0c1024; /* titles */
+  --card: #ffffff; /* code blocks */
+  --card-foreground: #1f2540; /* code */
+  --muted: #fafafa; /* the video's frame */
+  --muted-foreground: #414a63; /* paragraphs, and comments in code */
+  --accent: #dfe1e8; /* a button under the pointer */
+  --accent-foreground: #0c1024;
+  --primary: #7c3aed; /* keywords in code */
+  --border: rgba(12, 16, 36, 0.08);
+  --ring: #3b82f6; /* keyboard focus */
 
-  /* the code */
-  --plain-code: #1f2540;
-  --quiet-comment: #8a90a6;
-  --mighty-keyword: #7c3aed;
-  --friendly-string: #0f766e;
-  --happy-little-function: #2563eb;
-
-  /* the logo: the paints its gradient runs through */
-  --phthalo-blue: #3b82f6;
-  --ultramarine: #4f46e5;
-  --dioxazine-purple: #7c3aed;
-  --quinacridone-magenta: #c026d3;
-  --alizarin-crimson: #e11d48;
+  /* the logo's gradient runs through these five */
+  --chart-1: #3b82f6; /* also functions in code */
+  --chart-2: #4f46e5;
+  --chart-3: #7c3aed;
+  --chart-4: #c026d3;
+  --chart-5: #e11d48; /* also strings in code */
 }
 
 .dark {
-  --canvas: #101117;
-  --liquid-white: #181a22;
-  --happy-little-cloud: #15171e;
-  --midnight-black: #f1f2f6;
-  --soft-spoken: #a4a9ba;
-  --wet-on-wet: rgba(241, 242, 246, 0.1);
+  --background: #101117;
+  --foreground: #f1f2f6;
+  --card: #181a22;
+  --card-foreground: #dfe2ee;
+  --muted: #15171e;
+  --muted-foreground: #a4a9ba;
+  --accent: #262a36;
+  --accent-foreground: #f1f2f6;
+  --primary: #b794f6;
+  --border: rgba(241, 242, 246, 0.1);
+  --ring: #60a5fa;
 
-  --plain-code: #dfe2ee;
-  --quiet-comment: #7b8198;
-  --mighty-keyword: #b794f6;
-  --friendly-string: #5eead4;
-  --happy-little-function: #7fb0ff;
-
-  --phthalo-blue: #60a5fa;
-  --ultramarine: #818cf8;
-  --dioxazine-purple: #a78bfa;
-  --quinacridone-magenta: #e879f9;
-  --alizarin-crimson: #fb7185;
+  --chart-1: #60a5fa;
+  --chart-2: #818cf8;
+  --chart-3: #a78bfa;
+  --chart-4: #e879f9;
+  --chart-5: #fb7185;
 }

@@ -76,6 +76,13 @@ const EASE = "cubic-bezier(0.2, 0, 0, 1)"
 /** The launcher's box: two 40px buttons, a 4px gap, 4px padding, 1px border. */
 const LAUNCHER = { w: 94, h: 50, radius: 25 }
 const PANEL_RADIUS = 12
+/** When an animation is over, or should have been: a tab in the background
+ *  does not advance its animations, and the panel must not sit half-built
+ *  (or refuse to close) until someone looks at it. */
+const ended = (a: Animation, ms: number) => Promise.race([
+  a.finished.then(() => {}, () => {}),
+  new Promise<void>((r) => setTimeout(r, ms + 250)),
+])
 
 // ── Sections ─────────────────────────────────────────────────────────────
 // The project's own (the `groups` option: a title and a pattern, tried in
@@ -493,7 +500,7 @@ export function Playground({ backend = http, docked = false }: { backend?: Backe
       const to = launcherAt()
       const frames = pos ? [{ ...big, left: `${r.left}px`, top: `${r.top}px` }, { ...small, left: `${to.left}px`, top: `${to.top}px` }] : [big, small]
       inner.animate([{ opacity: 1 }, { opacity: 0 }], { duration: SHRINK * 0.6, fill: "forwards" })
-      await panel.animate(frames, { duration: SHRINK, easing: EASE, fill: "forwards" }).finished
+      await ended(panel.animate(frames, { duration: SHRINK, easing: EASE, fill: "forwards" }), SHRINK)
     } catch { /* the animation was cancelled: close anyway */ } finally {
       switching.current = false
       shrank.current = true
@@ -520,9 +527,9 @@ export function Playground({ backend = http, docked = false }: { backend?: Backe
       const frames = pos ? [{ ...small, left: `${from.left}px`, top: `${from.top}px` }, { ...big, left: `${r.left}px`, top: `${r.top}px` }] : [small, big]
       inner.animate([{ opacity: 0 }, { opacity: 0, offset: 0.3 }, { opacity: 1 }], { duration: GROW })
       const grow = panel.animate(frames, { duration: GROW, easing: EASE })
-      const done = () => { freeze(panel, inner, false); setListReady(true) }
-      grow.finished.then(done, done)
-      return () => grow.cancel()
+      let live = true
+      ended(grow, GROW).then(() => { if (!live) return; grow.cancel(); freeze(panel, inner, false); setListReady(true) })
+      return () => { live = false; grow.cancel(); freeze(panel, inner, false); setListReady(true) }
     }
     if (shrank.current) {
       shrank.current = false

@@ -2,12 +2,13 @@
 *, *::before, *::after { box-sizing: border-box; }
 body {
   margin: 0;
-  background: var(--canvas);
-  color: var(--soft-spoken);
+  background: var(--background);
+  color: var(--muted-foreground);
   font: 16px/1.55 Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
-.wrap { max-width: 1310px; margin: 0 auto; padding: 64px 24px 48px; }
+/* 1290px of content, plus the gutter */
+.wrap { box-sizing: content-box; max-width: 1290px; margin: 0 auto; padding: 64px 24px 96px; } /* room at the foot for the tool's launcher */
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 /* the logo: squares, each column a step along a gradient of five tokens
@@ -17,49 +18,51 @@ body {
 .logo { display: block; width: 100%; height: auto; margin: 0 0 64px; }
 .logo g { animation: flow 14s linear infinite; }
 @keyframes flow {
-  0%, 100% { fill: var(--phthalo-blue); }
-  20% { fill: var(--ultramarine); }
-  40% { fill: var(--dioxazine-purple); }
-  60% { fill: var(--quinacridone-magenta); }
-  80% { fill: var(--alizarin-crimson); }
+  0%, 100% { fill: var(--chart-1); }
+  20% { fill: var(--chart-2); }
+  40% { fill: var(--chart-3); }
+  60% { fill: var(--chart-4); }
+  80% { fill: var(--chart-5); }
 }
 /* still, for anyone who asked for less motion: each column keeps the colour it starts on */
 @media (prefers-reduced-motion: reduce) { .logo g { animation-play-state: paused; } }
 
 /* two columns */
-.cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.96fr); gap: 32px 48px; align-items: start; }
-h2 { margin: 0 0 12px; font-size: 16px; font-weight: 560; color: var(--midnight-black); }
-p { margin: 0 0 20px; color: var(--soft-spoken); max-width: 38em; }
+.cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.96fr); gap: 32px 48px; }
+/* the left column is as tall as the right, and its last item (the GitHub link) sits on its bottom edge */
+.cols > .left { display: flex; flex-direction: column; }
+.github { margin-top: auto; padding-top: 32px; align-self: flex-start; display: inline-grid; color: var(--muted-foreground); }
+.github:hover { color: var(--foreground); }
+.github svg { width: 26px; height: 26px; }
+h2 { margin: 0 0 12px; font-size: 16px; font-weight: 560; color: var(--foreground); }
+p { margin: 0 0 20px; color: var(--muted-foreground); max-width: 38em; }
 p:last-child { margin-bottom: 0; }
 .block + .block { margin-top: 24px; }
 .block.features { margin-top: 48px; }
 
 /* the video */
-.video { margin-top: 32px; aspect-ratio: 620 / 394; border-radius: 22px; background: var(--happy-little-cloud); border: 1px solid var(--wet-on-wet); overflow: hidden; }
+.video { margin-top: 32px; aspect-ratio: 620 / 394; border-radius: 22px; background: var(--muted); border: 1px solid var(--border); overflow: hidden; }
 .video video { display: block; width: 100%; height: 100%; object-fit: cover; }
 
 /* code, to copy */
-.code { position: relative; border-radius: 8px; background: var(--liquid-white); border: 1px solid var(--wet-on-wet); }
-.code pre { margin: 0; padding: 14px 52px 14px 16px; overflow-x: auto; font: 15px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--plain-code); }
-.code .comment { color: var(--quiet-comment); }
-.code .keyword { color: var(--mighty-keyword); }
-.code .string { color: var(--friendly-string); }
-.code .fn { color: var(--happy-little-function); }
-.copy { position: absolute; top: 10px; right: 10px; display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: none; border-radius: 6px; background: transparent; color: var(--soft-spoken); cursor: pointer; }
-.copy:hover { background: var(--canvas); color: var(--midnight-black); }
+.code { position: relative; border-radius: 8px; background: var(--card); border: 1px solid var(--border); }
+.code pre { margin: 0; padding: 14px 52px 14px 16px; overflow-x: auto; font: 15px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--card-foreground); }
+.code .comment { color: var(--muted-foreground); }
+.code .keyword { color: var(--primary); }
+.code .string { color: var(--chart-5); }
+.code .fn { color: var(--chart-1); }
+.copy { position: absolute; top: 10px; right: 10px; display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: none; border-radius: 6px; background: transparent; color: var(--muted-foreground); cursor: pointer; }
+.copy:hover { background: var(--accent); color: var(--accent-foreground); }
 .copy svg { width: 18px; height: 18px; }
-.copy[data-done] { color: var(--friendly-string); }
+.copy[data-done] { color: var(--primary); }
 
 /* features */
 .features p { margin-bottom: 18px; }
-.features b { font-weight: 560; color: var(--midnight-black); }
-.features code { font: 0.9em ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--plain-code); background: var(--liquid-white); border: 1px solid var(--wet-on-wet); border-radius: 4px; padding: 0 4px; }
+.features p:last-child { margin-bottom: 0; }
+.features b { font-weight: 560; color: var(--foreground); }
+.features code { font: 0.9em ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--card-foreground); background: var(--card); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
 
-footer { margin-top: 56px; }
-footer a { display: inline-grid; color: var(--soft-spoken); }
-footer a:hover { color: var(--midnight-black); }
-footer svg { width: 24px; height: 24px; }
-:focus-visible { outline: 2px solid var(--phthalo-blue); outline-offset: 2px; }
+:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 
 @media (max-width: 860px) {
   .wrap { padding-top: 36px; }

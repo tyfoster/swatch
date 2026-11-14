@@ -12,7 +12,7 @@ import tokens from "./tokens.css?raw"
 // right as a gradient, and it flows.
 const NS = "http://www.w3.org/2000/svg"
 const DURATION = 14 // seconds; matches .logo g in site.css
-const SPREAD = 0.8 // of the cycle laid across the logo: blue at the left edge, crimson at the right
+const SPREAD = 0.8 // of the cycle laid across the logo: --chart-1 at the left edge, --chart-5 at the right
 const logo = document.getElementById("logo")!
 const columns = new Map<number, SVGGElement>()
 for (const [y, runs] of ROWS) for (const [x0, n] of runs) for (let i = 0; i < n; i++) {
@@ -42,9 +42,9 @@ mountDemo({
   // where the tokens are used: the page's own styles
   sources: { "site.css": siteCss },
   groups: [
-    ["The page", "^--(canvas|liquid-white|happy-little-cloud|midnight-black|soft-spoken|wet-on-wet)$"],
-    ["The code", "^--(plain-code|quiet-comment|mighty-keyword|friendly-string|happy-little-function)$"],
-    ["The logo", "."],
+    ["Base", "^--(background|foreground|primary|border|ring)$"],
+    ["Surfaces", "^--(card|muted|accent)"],
+    ["Chart: the logo", "^--chart-"],
   ],
 })
 
