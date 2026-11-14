@@ -44,7 +44,13 @@ class Flap {
   private readonly landing = half("bottom leaf landing")
   private at = 0
   private run = 0
-  constructor(private readonly reel: Face[], private readonly target: number, extra = false) {
+  /** `shuffled`: the cards come up in a new random order every run (the
+   *  colours), still ending on the target; otherwise in the reel's order
+   *  (the letters, A to Z). */
+  /** the cards a shuffled flap draws from (its reel is rebuilt each run) */
+  private readonly cards: Face[]
+  constructor(private reel: Face[], private target: number, extra = false, private readonly shuffled = false) {
+    this.cards = reel
     this.el.className = extra ? "flap extra" : "flap"
     this.el.append(this.top, this.bottom, this.falling, this.landing)
     this.set(0)
@@ -75,7 +81,22 @@ class Flap {
     // a run still turning a card is told to stop (it checks `run`), and its leaves are put down
     for (const leaf of [this.falling, this.landing]) for (const a of leaf.getAnimations()) a.cancel()
     if (still()) return this.set(this.target)
-    this.set(((this.target - turns) % n + n) % n)
+    if (this.shuffled) {
+      // a fresh path through the cards for this run: random, never the same
+      // card twice running, and ending on the target
+      const path: Face[] = [this.reel[this.target]]
+      for (let k = 0; k < turns; k++) {
+        const others = this.cards.filter((c) => c !== path[0])
+        path.unshift(others[Math.floor(Math.random() * others.length)])
+      }
+      this.reel = path
+      this.target = turns
+      return this.go(run, turns, wait, 0)
+    }
+    return this.go(run, turns, wait, ((this.target - turns) % n + n) % n)
+  }
+  private async go(run: number, turns: number, wait: number, from: number) {
+    this.set(from)
     await new Promise((r) => setTimeout(r, wait))
     if (run !== this.run) return
     // every card dealt is turned, even round the reel more than once (five
@@ -100,12 +121,13 @@ export function mountSign(sign: HTMLElement) {
     [new Flap(LETTERS, 0, true), 0],
     // the colours settle in order, blue to crimson, the last of them one
     // card before the last letter: they turn as long as the letters do
-    ...COLOURS.map((_, i): [Flap, number] => [new Flap(COLOURS, i, true), LONGEST - COLOURS.length + i]),
+    ...COLOURS.map((_, i): [Flap, number] => [new Flap(COLOURS, i, true, true), LONGEST - COLOURS.length + i]),
   ]
   sign.replaceChildren(...flaps.map(([f]) => f.el))
   // The six letters start together and stop one after another, in an order
   // shuffled each time the sign runs: each is dealt a different number of
-  // cards to turn. The colours start with them and keep their order.
+  // cards to turn. The colours start with them, flip through the five in a
+  // random order, and settle in theirs.
   const play = () => {
     const order = [...WORD].map((_, i) => i)
     for (let i = order.length - 1; i > 0; i--) {
