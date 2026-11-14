@@ -1,8 +1,9 @@
 // The wordmark as a split-flap sign, the kind a railway station's
-// departure board is made of. Twelve flaps: six spell SWATCH, one stays
-// blank, and five show colours (the chart tokens: swatches). When the page
-// loads each flap runs through its reel, a card at a time, and stops on
-// its own; the letters settle left to right.
+// departure board is made of. Twelve flaps: six in the middle spell
+// SWATCH, with three colours either side of them (the chart tokens:
+// swatches), running blue to crimson across the sign. When the page loads
+// each flap runs through its reel, a card at a time, and stops on its own;
+// the letters settle left to right.
 //
 // A flap is four half-cards. Two lie flat: the top of the card coming, and
 // the bottom of the card showing. Two turn: the top of the card showing
@@ -73,11 +74,13 @@ class Flap {
 }
 
 export function mountSign(sign: HTMLElement) {
+  const colour = (n: number, turns: number): [Flap, number] => [new Flap(COLOURS, n - 1, true), turns]
   const flaps: [Flap, number][] = [
+    // three colours, the word, three colours: the middle one of the five is on both sides of the word
+    colour(1, 11), colour(2, 12), colour(3, 13),
     // each letter runs a little longer than the one before, so they settle left to right
     ...[...WORD].map((c, i): [Flap, number] => [new Flap(LETTERS, LETTERS.findIndex((f) => f.text === c)), 9 + i * 2]),
-    [new Flap(LETTERS, 0, true), 0],
-    ...COLOURS.map((_, i): [Flap, number] => [new Flap(COLOURS, i, true), 12 + i]),
+    colour(3, 13), colour(4, 14), colour(5, 15),
   ]
   sign.replaceChildren(...flaps.map(([f]) => f.el))
   const play = () => flaps.forEach(([f, turns], i) => f.play(turns, 150 + i * 45))

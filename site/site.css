@@ -27,8 +27,8 @@ body {
 /* still, for anyone who asked for less motion: each column keeps the colour it starts on */
 @media (prefers-reduced-motion: reduce) { .logo g { animation-play-state: paused; } }
 
-/* the logo as a split-flap sign (logo-flap.ts): twelve flaps in a row, six
-   for the letters, one blank, five for colours. Each is two halves with a
+/* the logo as a split-flap sign (logo-flap.ts): twelve flaps in a row, the
+   six letters in the middle and three colours either side. Each is two halves with a
    hairline of page between them. */
 .sign { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 8px; aspect-ratio: 8.5; margin: 0 0 64px; cursor: pointer; user-select: none; }
 .flap { position: relative; perspective: 500px; container-type: inline-size; }
