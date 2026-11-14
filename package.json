@@ -32,12 +32,13 @@
     }
   },
   "scripts": {
-    "build": "node build.mjs && tsc -p tsconfig.build.json",
+    "build": "node build.mjs && tsc -p tsconfig.build.json && node build.mjs --types",
     "typecheck": "tsc --noEmit",
     "test": "node --test test/*.test.ts",
     "example": "npm run build && vite example",
     "site": "vite site",
-    "site:build": "vite build site"
+    "site:build": "vite build site",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build"
   },
   "dependencies": {
     "postcss": "^8.5.0"

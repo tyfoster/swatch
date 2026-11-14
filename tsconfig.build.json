@@ -8,5 +8,7 @@
     "rootDir": "src",
     "outDir": "dist"
   },
-  "include": ["src/vite.ts"]
+  "include": [
+    "src/vite.ts"
+  ]
 }
