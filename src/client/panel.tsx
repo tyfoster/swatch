@@ -18,7 +18,12 @@ import { Picker } from "./picker.tsx"
 const THEMES: Theme[] = ["light", "dark"]
 type Edits = Record<string, Partial<Record<Theme, string>>>
 
-const KEY = "swatch"
+// Where this panel keeps its unsaved edits and its journal: one place per
+// project (the plugin tags its script with a hash of the project's root),
+// so two projects served on the same host and port never share them. The
+// website's demo, which has no plugin, keeps them under "swatch".
+const PROJECT = typeof document === "undefined" ? null : document.querySelector<HTMLScriptElement>("script[data-swatch-project]")?.dataset.swatchProject
+const KEY = PROJECT ? `swatch:${PROJECT}` : "swatch"
 const FIND = "#ff00ff"
 const NAME = /^--[a-z0-9-]+$/
 

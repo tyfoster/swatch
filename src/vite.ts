@@ -6,16 +6,20 @@
 //
 //   GET    /__swatch            the tokens (see Sheet)
 //   POST   /__swatch            [{ theme, name, value }] writes values; answers as GET, plus `changes`
-//   GET    /__swatch/events     server-sent events: "css" when a stylesheet changes, "incoming" when an agent answers
+//   GET    /__swatch/version    { css, incoming }: counters that move when a stylesheet changes or an agent answers
 //   GET    /__swatch/client.js  the panel
 //   POST   /__swatch/request    leaves a request for a coding agent (server/requests.ts)
 //   GET    /__swatch/incoming   what the agent left, or null
 //   DELETE /__swatch/incoming   the panel has taken it
+//
+// Writes (POST and DELETE) are held to server/guard.ts.
+import { createHash } from "node:crypto"
 import { readFileSync } from "node:fs"
 import type { IncomingMessage, ServerResponse } from "node:http"
 import { fileURLToPath } from "node:url"
 import type { Plugin } from "vite"
-import { Project, forget, watched, type Options } from "./server/project.ts"
+import { refuseWrite, type Trust } from "./server/guard.ts"
+import { Project, type Options } from "./server/project.ts"
 import { Queue, type Request } from "./server/requests.ts"
 import type { Edit } from "./server/stylesheet.ts"
 
@@ -27,61 +31,66 @@ const CLIENT = fileURLToPath(new URL("./client.js", import.meta.url))
 export default function swatch(options: Options = {}): Plugin {
   let project: Project
   let queue: Queue
+  let trust: Trust = {}
+  // names this project for the panel's saved state, so two projects served
+  // on the same port never share unsaved edits; a hash, so the page never
+  // carries the project's path
+  let id = ""
   return {
     name: "swatch",
     apply: "serve",
     configResolved(config) {
-      project = new Project(config.root, options)
+      project = new Project(config.root, options, [config.build.outDir, config.cacheDir, config.publicDir].filter(Boolean))
       queue = new Queue(config.root)
+      id = createHash("sha256").update(project.root).digest("hex").slice(0, 12)
+      const hosts = config.server.allowedHosts
+      trust = { allowedHosts: hosts === true ? true : Array.isArray(hosts) ? hosts : undefined, allowedOrigins: options.allowedOrigins }
     },
     transformIndexHtml: () => [
-      { tag: "script", attrs: { type: "module", src: "/__swatch/client.js" }, injectTo: "body" },
+      { tag: "script", attrs: { type: "module", src: "/__swatch/client.js", "data-swatch-project": id }, injectTo: "body" },
     ],
     configureServer(server) {
-      // the panel hears when a stylesheet changes on disk (a save, an
-      // agent's edit, a branch switch) and when an agent leaves an answer
-      const listeners = new Set<ServerResponse>()
-      const tell = (what: "css" | "incoming") => { for (const res of listeners) res.write(`data: ${what}\n\n`) }
+      // The panel asks every couple of seconds whether anything moved: a
+      // stylesheet changed on disk (a save, an agent's edit, a branch
+      // switch) or an agent left an answer. Asking, rather than holding a
+      // connection open, keeps every tab from taking one of the few
+      // connections a browser allows each site.
+      const version = { css: 0, incoming: 0 }
       const changed = (f: string, listChanged: boolean) => {
-        forget(f, listChanged)
-        if (f === queue.incoming) tell("incoming")
-        else if (f.endsWith(".css")) tell("css")
+        project.forget(f, listChanged)
+        if (f === queue.incoming) version.incoming++
+        else if (f.endsWith(".css")) version.css++
       }
-      watched()
+      project.watch()
       server.watcher.add(queue.dir)
       server.watcher.on("change", (f) => changed(f, false))
       server.watcher.on("add", (f) => changed(f, true))
       server.watcher.on("unlink", (f) => changed(f, true))
-      server.watcher.on("addDir", () => forget("", true))
-      server.watcher.on("unlinkDir", () => forget("", true))
+      server.watcher.on("addDir", (f) => project.forget(f, true))
+      server.watcher.on("unlinkDir", (f) => project.forget(f, true))
 
       server.middlewares.use("/__swatch", (req: IncomingMessage, res: ServerResponse) => {
         const send = (code: number, body: unknown) => {
           res.statusCode = code
           res.setHeader("content-type", "application/json")
+          res.setHeader("cache-control", "no-store")
           res.end(JSON.stringify(body))
         }
-        // only the page on this dev server may read or write: a page on
-        // another origin (another localhost port included) is refused
-        const origin = req.headers.origin
-        if (origin && origin !== `http://${req.headers.host}` && origin !== `https://${req.headers.host}`) return send(403, { error: "cross-origin request refused" })
         const route = (req.url ?? "/").split("?")[0]
         const method = req.method ?? ""
-        const routes: Record<string, string[]> = { "/": ["GET", "POST"], "/events": ["GET"], "/client.js": ["GET"], "/request": ["POST"], "/incoming": ["GET", "DELETE"] }
+        const routes: Record<string, string[]> = { "/": ["GET", "POST"], "/version": ["GET"], "/client.js": ["GET"], "/request": ["POST"], "/incoming": ["GET", "DELETE"] }
         if (!routes[route]) return send(404, { error: "no such route" })
         if (!routes[route].includes(method)) return send(405, { error: `${routes[route].join(" or ")} only` })
+        if (method !== "GET") {
+          const why = refuseWrite(req, trust)
+          if (why) return send(403, { error: why })
+        }
         if (route === "/client.js") {
           res.setHeader("content-type", "text/javascript")
           res.setHeader("cache-control", "no-cache")
           return res.end(readFileSync(CLIENT))
         }
-        if (route === "/events") {
-          res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache", connection: "keep-alive" })
-          res.write("retry: 2000\n\n")
-          listeners.add(res)
-          req.on("close", () => listeners.delete(res))
-          return
-        }
+        if (route === "/version") return send(200, version)
         if (method === "GET" || method === "DELETE") {
           try {
             if (route === "/") return send(200, project.read())

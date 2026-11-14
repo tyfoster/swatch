@@ -54,12 +54,17 @@ class Flap {
     this.at = i
     for (const part of [this.top, this.bottom, this.falling, this.landing]) show(part, this.reel[i])
   }
-  private async flip() {
+  /** Turns one card. `run` is the run it belongs to: if the sign has been
+   *  started again meanwhile, the turn stops where it is and leaves the
+   *  flap to the new run. */
+  private async flip(run: number) {
     const next = (this.at + 1) % this.reel.length
     show(this.top, this.reel[next])
     show(this.landing, this.reel[next])
     await ended(this.falling.animate([{ transform: "rotateX(0deg)" }, { transform: "rotateX(-90deg)" }], { duration: FLIP / 2, easing: "ease-in", fill: "forwards" }), FLIP / 2)
+    if (run !== this.run) return
     await ended(this.landing.animate([{ transform: "rotateX(90deg)" }, { transform: "rotateX(0deg)" }], { duration: FLIP / 2, easing: "ease-out", fill: "forwards" }), FLIP / 2)
+    if (run !== this.run) return
     this.set(next)
     for (const leaf of [this.falling, this.landing]) for (const a of leaf.getAnimations()) a.cancel()
   }
@@ -67,10 +72,13 @@ class Flap {
   async play(turns: number, wait: number) {
     const run = ++this.run
     const n = this.reel.length
+    // a run still turning a card is told to stop (it checks `run`), and its leaves are put down
+    for (const leaf of [this.falling, this.landing]) for (const a of leaf.getAnimations()) a.cancel()
     if (still()) return this.set(this.target)
     this.set(((this.target - turns) % n + n) % n)
     await new Promise((r) => setTimeout(r, wait))
-    while (this.at !== this.target && run === this.run) await this.flip()
+    if (run !== this.run) return
+    while (this.at !== this.target && run === this.run) await this.flip(run)
   }
 }
 

@@ -43,9 +43,27 @@ export const http: Backend = {
   request: (body) => fetch("/__swatch/request", { method: "POST", body: JSON.stringify(body) }).then(json),
   incoming: () => fetch("/__swatch/incoming").then(json),
   clearIncoming: () => fetch("/__swatch/incoming", { method: "DELETE" }).then(json),
+  // Asks every two seconds whether anything moved, while the tab is in
+  // view. Asking, rather than holding a connection open, keeps every tab
+  // from taking one of the few connections a browser allows each site.
   subscribe: (on) => {
-    const events = new EventSource("/__swatch/events")
-    events.onmessage = (e) => { if (e.data === "css" || e.data === "incoming") on(e.data) }
-    return () => events.close()
+    let last: { css: number; incoming: number } | null = null
+    let busy = false
+    const check = async () => {
+      if (busy || document.hidden) return
+      busy = true
+      try {
+        const now = await fetch("/__swatch/version").then(json) as { css: number; incoming: number }
+        if (last && now.css !== last.css) on("css")
+        if (last && now.incoming !== last.incoming) on("incoming")
+        last = now
+      } catch { /* the dev server is restarting: ask again next time */ } finally { busy = false }
+    }
+    check()
+    const timer = setInterval(check, 2000)
+    // back in view: catch up at once rather than on the next tick
+    const shown = () => { if (!document.hidden) check() }
+    document.addEventListener("visibilitychange", shown)
+    return () => { clearInterval(timer); document.removeEventListener("visibilitychange", shown) }
   },
 }

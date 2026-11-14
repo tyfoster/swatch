@@ -8,12 +8,12 @@
 // The agent answers a Figma sync (or proposes colours of its own) by
 // writing `.swatch/incoming.json`, { edits: { "--name": { light?, dark? } },
 // note? }, which the panel loads as unsaved edits (previewed, and gone
-// again on Reset) and then deletes. A request it has dealt with is noted
-// in `.swatch/done.jsonl`, and is no longer pending.
+// again on Reset) and then deletes. A request it has dealt with is taken
+// out of requests.jsonl and noted in `.swatch/done.jsonl` (the last 100).
 //
 // The MCP server (mcp.ts) is this file's other reader and writer, so an
 // agent needs no knowledge of these files: it has tools for them.
-import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs"
+import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { THEMES, check, type Change, type Theme } from "./stylesheet.ts"
 
@@ -60,23 +60,49 @@ export class Queue {
   }
   clear() { rmSync(this.incoming, { force: true }) }
 
-  private lines(file: string): unknown[] {
-    const path = join(this.dir, file)
-    if (!existsSync(path)) return []
-    return readFileSync(path, "utf8").split("\n").filter(Boolean).flatMap((l) => { try { return [JSON.parse(l)] } catch { return [] } })
-  }
+  private get file() { return join(this.dir, "requests.jsonl") }
+  // the parsed queue, kept while the file is unchanged: an agent waiting
+  // for a request asks twice a second, and almost always nothing is new
+  private seen: { mtime: number; size: number; requests: Queued[] } | null = null
 
-  /** The requests no agent has dealt with yet, oldest first. */
+  /** The requests no agent has dealt with yet, oldest first. A request that
+   *  has been dealt with is taken out of the file (below), so the file only
+   *  ever holds what is pending, and stays small. */
   pending(): Queued[] {
-    const done = new Set((this.lines("done.jsonl") as { id: string }[]).map((d) => d.id))
-    return (this.lines("requests.jsonl") as Queued[]).filter((r) => r && typeof r.id === "string" && !done.has(r.id))
+    if (!existsSync(this.file)) return []
+    const { mtimeMs, size } = statSync(this.file)
+    if (this.seen && this.seen.mtime === mtimeMs && this.seen.size === size) return this.seen.requests
+    const requests = readFileSync(this.file, "utf8").split("\n").filter(Boolean)
+      .flatMap((l) => { try { return [JSON.parse(l) as Queued] } catch { return [] } })
+      .filter((r) => r && typeof r.id === "string")
+    this.seen = { mtime: mtimeMs, size, requests }
+    return requests
   }
 
-  /** Notes a request as dealt with. */
+  /** Takes a request out of the queue, as dealt with, and notes it (with
+   *  its note) in done.jsonl, which keeps the last hundred. The panel may
+   *  append a request while this rewrites the file: the file is read again
+   *  and the rewrite retried if it grew in between, so no request is lost. */
   resolve(id: string, note?: string) {
     if (!this.pending().some((r) => r.id === id)) throw new Error(`no pending request "${id}"`)
-    mkdirSync(this.dir, { recursive: true })
-    appendFileSync(join(this.dir, "done.jsonl"), JSON.stringify({ id, at: new Date().toISOString(), ...(note ? { note: String(note).slice(0, 500) } : {}) }) + "\n")
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const text = readFileSync(this.file, "utf8")
+      const kept = text.split("\n").filter((l) => {
+        if (!l.trim()) return false
+        try { return (JSON.parse(l) as Queued).id !== id } catch { return true }
+      })
+      const tmp = `${this.file}.tmp`
+      writeFileSync(tmp, kept.length ? kept.join("\n") + "\n" : "")
+      if (statSync(this.file).size !== Buffer.byteLength(text)) continue // something was added: read again
+      renameSync(tmp, this.file)
+      this.seen = null
+      const done = join(this.dir, "done.jsonl")
+      const log = existsSync(done) ? readFileSync(done, "utf8").split("\n").filter(Boolean) : []
+      log.push(JSON.stringify({ id, at: new Date().toISOString(), ...(note ? { note: String(note).slice(0, 500) } : {}) }))
+      writeFileSync(done, log.slice(-100).join("\n") + "\n")
+      return
+    }
+    throw new Error("the queue kept changing while it was being updated; try again")
   }
 
   /** Leaves values for the panel to load as unsaved edits: every one

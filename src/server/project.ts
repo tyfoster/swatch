@@ -3,7 +3,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs"
 import { join, relative, resolve } from "node:path"
 import postcss, { type AtRule } from "postcss"
-import { readSheet, write } from "./files.ts"
+import { readSheet, writeAll } from "./files.ts"
 import { THEMES, check, type Change, type DarkSelector, type Edit, type Theme } from "./stylesheet.ts"
 
 export type Options = {
@@ -21,6 +21,14 @@ export type Options = {
   /** Show "Save & send to agent" and "Figma sync", which leave requests in
    *  `.swatch/requests.jsonl` for a coding agent to pick up. */
   agent?: boolean
+  /** Folders, from the project root, that are neither searched for
+   *  stylesheets nor counted for uses (node_modules, hidden folders and the
+   *  build output are left out already). */
+  ignore?: string[]
+  /** Origins besides the dev server's own that may save, e.g. a tunnel's
+   *  "https://my-tunnel.example" (hosts in Vite's `server.allowedHosts`
+   *  are trusted already). */
+  allowedOrigins?: string[]
 }
 
 export type Token = {
@@ -36,17 +44,18 @@ export type Sheet = {
   groups: [string, string][] | null; agent: boolean; changes?: Change[]
 }
 
-/** Folders that are never the project's own source. */
-const SKIP = new Set(["node_modules", "dist", "build", "out", "coverage", "public", "vendor", "target", "tmp"])
 const SOURCE = /\.(tsx?|jsx?|mjs|cjs|css|scss|vue|svelte|astro|html|mdx?)$/
 
-function walk(dir: string, test: RegExp, acc: string[] = []): string[] {
+/** Every file under `dir` whose name passes `test`, leaving out
+ *  node_modules, hidden folders, and the folders in `skip` (absolute). */
+function walk(dir: string, test: RegExp, skip: Set<string>, acc: string[] = []): string[] {
   for (const f of readdirSync(dir)) {
-    if (SKIP.has(f) || f.startsWith(".")) continue
+    if (f === "node_modules" || f.startsWith(".")) continue
     const p = join(dir, f)
+    if (skip.has(p)) continue
     let s
     try { s = statSync(p) } catch { continue } // a dangling link
-    if (s.isDirectory()) walk(p, test, acc)
+    if (s.isDirectory()) walk(p, test, skip, acc)
     else if (test.test(f)) acc.push(p)
   }
   return acc
@@ -71,21 +80,12 @@ const VAR = /var\(\s*(--[\w-]+)/g
 
 type Counts = Map<string, number>
 const counted = new Map<string, { mtime: number; counts: Counts }>()
-// Under a dev server its file watcher says what changed, so a read walks no
-// directories and stats no files: the list of sources is kept until a file
-// is added or removed, and a file's counts until it changes. Without a
-// watcher (a test, a script) every read looks at the disk.
-let watching = false
-let listed: { dir: string; files: string[] } | null = null
-export const watched = () => { watching = true }
-export function forget(path: string, listChanged: boolean) {
-  counted.delete(path)
-  if (listChanged) listed = null
-}
 
-function countIn(path: string): Counts {
+/** A file's uses, counted again only when it has changed: `trusted` (under
+ *  a dev server, whose watcher says what changed) skips even the stat. */
+function countIn(path: string, trusted: boolean): Counts {
   const hit = counted.get(path)
-  if (watching && hit) return hit.counts
+  if (trusted && hit) return hit.counts
   const mtime = statSync(path).mtimeMs
   if (hit && hit.mtime === mtime) return hit.counts
   const text = readFileSync(path, "utf8")
@@ -119,21 +119,43 @@ function countIn(path: string): Counts {
 export class Project {
   readonly root: string
   readonly options: Options
-  constructor(root: string, options: Options = {}) {
+  /** folders left out of every search, absolute */
+  private readonly skip: Set<string>
+  // Under a dev server its file watcher says what changed, so a read walks
+  // no directories: the lists of stylesheets and sources are kept until a
+  // file is added or removed (or a stylesheet changes, which can give it
+  // tokens or take them away), and a file's use counts until it changes.
+  // Without a watcher (a test, the MCP server) every read looks at the disk.
+  private watching = false
+  private sheets: string[] | null = null
+  private sources: string[] | null = null
+  constructor(root: string, options: Options = {}, skip: string[] = []) {
     this.root = resolve(root)
     this.options = options
+    this.skip = new Set([...skip, "dist", "coverage", ...(options.ignore ?? [])].map((d) => resolve(this.root, d)))
   }
 
   private get src() { return join(this.root, this.options.src ?? "") }
+
+  watch() { this.watching = true }
+  /** A file changed (or was added or removed: `listChanged`). */
+  forget(path: string, listChanged: boolean) {
+    counted.delete(path)
+    if (listChanged) this.sources = null
+    if (listChanged || path.endsWith(".css")) this.sheets = null
+  }
 
   /** The stylesheets that hold tokens: the ones named, or every one in the
    *  project that declares a custom property on a theme. */
   stylesheets(): string[] {
     const named = this.options.css
     if (named) return [named].flat().map((f) => join(this.root, f)).filter((f) => existsSync(f))
-    return walk(this.root, /\.css$/).filter((f) => {
+    if (this.watching && this.sheets) return this.sheets
+    const found = walk(this.root, /\.css$/, this.skip).filter((f) => {
       try { return readSheet(f).tokens.size > 0 } catch { return false }
     })
+    if (this.watching) this.sheets = found
+    return found
   }
 
   read(): Sheet {
@@ -165,9 +187,10 @@ export class Project {
       const own = darkOf.get(t.name)
       if (own && key(own) !== key(dark)) t.darkAt = own
     }
-    if (!watching || listed?.dir !== this.src) listed = { dir: this.src, files: walk(this.src, SOURCE) }
-    for (const path of listed.files) {
-      for (const [name, n] of countIn(path)) tokens.get(name)?.uses.push({ file: relative(this.root, path), n })
+    const sources = (this.watching && this.sources) || walk(this.src, SOURCE, this.skip)
+    if (this.watching) this.sources = sources
+    for (const path of sources) {
+      for (const [name, n] of countIn(path, this.watching)) tokens.get(name)?.uses.push({ file: relative(this.root, path), n })
     }
     const groups = this.options.groups
       ? Object.entries(this.options.groups).map(([title, re]): [string, string] => [title, typeof re === "string" ? re : re.source])
@@ -177,8 +200,8 @@ export class Project {
 
   /** Sends each edit to the stylesheet that holds the token in that theme;
    *  failing that, the one that holds it in the other theme; failing that
-   *  (a new token), the one with the most tokens. Every edit is checked
-   *  before any file is touched. */
+   *  (a new token), the one with the most tokens. Every edit is checked,
+   *  and every file's new text worked out, before any file is touched. */
   write(edits: Edit[]): Change[] {
     if (!Array.isArray(edits)) throw new Error("expected a list of edits")
     edits.forEach(check)
@@ -196,8 +219,8 @@ export class Project {
       const targets = here.length ? here : e.value.trim() === "" ? [] : [holds(e.name).at(-1) ?? biggest]
       for (const f of targets) batches.set(f, [...(batches.get(f) ?? []), e])
     }
-    const changes: Change[] = []
-    for (const [file, batch] of batches) changes.push(...write(file, batch))
+    // every file changes, or none does
+    const changes = writeAll(batches)
     // one change per token and theme, however many files held it
     const seen = new Set<string>()
     return changes.filter((c) => { const k = `${c.name}|${c.theme}`; if (seen.has(k)) return false; seen.add(k); return true })

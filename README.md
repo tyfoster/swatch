@@ -81,8 +81,18 @@ swatch({
   groups: { Surfaces: /^--(background|card|popover)/, Text: /-foreground$/ },
   // show "Save & send to agent" and "Figma sync" (see below)
   agent: true,
+  // folders to leave out of the search (node_modules, hidden folders and the build output already are)
+  ignore: ["storybook-static"],
+  // origins besides the dev server's own that may save, such as a tunnel
+  allowedOrigins: ["https://my-tunnel.example"],
 })
 ```
+
+Saving is only accepted from the page on your dev server. Behind a tunnel
+or a forwarded port, add its host to Vite's `server.allowedHosts` (which
+Vite asks for anyway) or its origin to `allowedOrigins`. A dev server opened
+to the network with `--host` takes saves from browsers on the page, but not
+from scripts on other machines.
 
 ## Working with a coding agent
 
