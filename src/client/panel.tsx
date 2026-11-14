@@ -439,7 +439,6 @@ export function Playground({ backend = http, docked = false }: { backend?: Backe
   // the elements picked with Inspect; the list shows only their tokens
   const [selected, setSelected] = useState<Element[]>([])
   const [picking, setPicking] = useState<{ name: string; theme: Theme; rect: DOMRect } | null>(null)
-  const [confirmReset, setConfirmReset] = useState(false)
   // one write at a time: a Reset pressed mid-save would act on the file before the save lands
   const [busy, setBusy] = useState(false)
   const [draft, setDraft] = useState({ name: "--", value: "" })
@@ -806,7 +805,6 @@ export function Playground({ backend = http, docked = false }: { backend?: Backe
     setStatus(`Sent ${plural(changes.length, "change")} to the agent to commit`)
   }
   const reset = async () => {
-    setConfirmReset(false)
     // light lines first, so a token put back exists before its dark line
     const back = [...saved].sort((a, b) => (a.theme === b.theme ? 0 : a.theme === "light" ? -1 : 1))
       .map((c) => ({ name: c.name, theme: c.theme, value: c.from ?? "" }))
@@ -1048,6 +1046,8 @@ export function Playground({ backend = http, docked = false }: { backend?: Backe
       <div style={{ padding: "10px 12px", borderBottom: "1px solid #333", display: "flex", flexDirection: "column", gap: 8, cursor: docked ? "default" : "grab", userSelect: "none" }}
         onPointerDown={(e) => { if (!docked) drag(e, e.currentTarget.parentElement) }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <strong style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}><Icon size={18} /> Swatch</strong>
+          {/* what Inspect picked, beside the name; the rest of the row is pushed right */}
           {focus && (
             <span style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 4px 4px 8px", background: "#3a1f3a", border: `1px solid ${FIND}`, borderRadius: 6, whiteSpace: "nowrap", maxWidth: "40%", cursor: "default" }}
               title={`Showing the ${plural(focus.names.length, "token")} behind ${focus.all.join(", ")}`}>
@@ -1056,7 +1056,7 @@ export function Playground({ backend = http, docked = false }: { backend?: Backe
               <button style={{ ...S.btn, padding: "0 5px", background: "transparent", border: "none" }} onClick={() => setSelected([])} title="Show every token">✕</button>
             </span>
           )}
-          <strong style={{ fontSize: 13, flex: 1, display: "flex", alignItems: "center", gap: 6 }}><Icon size={18} /> Swatch</strong>
+          <span style={{ flex: 1 }} />
           <label style={{ display: "flex", gap: 4, alignItems: "center", whiteSpace: "nowrap" }}>
             <input type="checkbox" checked={unusedOnly} onChange={(e) => setUnusedOnly(e.target.checked)} /> unused
           </label>
@@ -1087,11 +1087,10 @@ export function Playground({ backend = http, docked = false }: { backend?: Backe
           return <>
             <button style={off(S.btn, !pending.length)} disabled={!pending.length} onClick={copy} title="Copy the unsaved values as CSS">Copy CSS</button>
             {agent && <button style={off(S.btn, busy)} disabled={busy} onClick={figmaSync} title={state.figma ? `Ask the agent to pull the colour variables from ${state.figma}` : "Ask the agent to pull the colour variables from a Figma file"}>Figma sync</button>}
-            {/* off until something has changed; a second press confirms */}
-            <button style={off(S.btn, busy || none)} disabled={busy || none}
-              onClick={() => confirmReset ? reset() : setConfirmReset(true)} onBlur={() => setConfirmReset(false)}
+            {/* off until something has changed */}
+            <button style={off(S.btn, busy || none)} disabled={busy || none} onClick={reset}
               title={`Undo everything this session: the unsaved edits, and what this tab has saved to ${file}`}>
-              {confirmReset ? `Reset ${plural(saved.length + pending.length, "change")}?` : "Reset"}
+              Reset
             </button>
             <button style={off({ ...S.btn, ...(agent ? {} : { background: canSave ? "#f25a43" : S.btn.background, borderColor: "transparent" }) }, !canSave)} disabled={!canSave} onClick={save} title={`Write the unsaved values into ${file}`}>Save</button>
             {agent && (
