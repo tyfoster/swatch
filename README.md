@@ -10,12 +10,12 @@ to the file. A production build never contains it.
 ## Install
 
 ```bash
-npm install @tyfoster/swatch -D
+npm install swatch-token -D
 ```
 
 ```ts
 // vite.config.ts
-import swatch from "@tyfoster/swatch/vite"
+import swatch from "swatch-token/vite"
 
 export default {
   plugins: [swatch()],
@@ -103,13 +103,13 @@ send colours back for you to preview.
 Run it from the project root. With Claude Code:
 
 ```bash
-claude mcp add swatch -- npx @tyfoster/swatch mcp
+claude mcp add swatch -- npx swatch-token mcp
 ```
 
 For any other MCP client:
 
 ```json
-{ "mcpServers": { "swatch": { "command": "npx", "args": ["@tyfoster/swatch", "mcp"] } } }
+{ "mcpServers": { "swatch": { "command": "npx", "args": ["swatch-token", "mcp"] } } }
 ```
 
 Then turn the panel's agent buttons on:
@@ -135,7 +135,7 @@ The agent's tools:
 | `swatch_propose_edits` | Shows values in the panel as unsaved edits; writes no file |
 | `swatch_write_tokens` | Writes values straight into the stylesheets |
 
-`npx @tyfoster/swatch mcp` finds the stylesheets the same way the plugin does; pass
+`npx swatch-token mcp` finds the stylesheets the same way the plugin does; pass
 `--css src/tokens.css` (and `--src src`) if you set those options there.
 
 Requests are kept in `.swatch/` at the project root: add it to

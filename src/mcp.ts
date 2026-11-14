@@ -1,4 +1,4 @@
-// Swatch's MCP server: `npx @tyfoster/swatch mcp`, run from the project root.
+// Swatch's MCP server: `npx swatch-token mcp`, run from the project root.
 //
 // It gives a coding agent tools for what the panel asks of it and for the
 // tokens themselves, so the agent never has to know about the files under
