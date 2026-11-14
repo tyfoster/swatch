@@ -78,10 +78,16 @@ function word(letters) {
   }
   return { rows: out, width: x }
 }
-// the A's last row ends where the T's bar begins, as in the original drawing
-const build = (w, a) => word([[S, 0], [w, 11], [a, 11], [T, 0], [C, 14], [H, 20]])
+// The W's last stroke and the A's first lean the same way, so the space
+// between them is the same in every row: the gap between the two letters'
+// boxes, plus how far each stroke travels (LEAN). Setting the boxes
+// KERN - LEAN apart puts KERN of space between the strokes, the same as
+// between the C and the H. The A's last row ends where the T's bar begins,
+// as in the original drawing.
+const KERN = 20, LEAN = (ROWS - 1) * SHEAR
+const build = (w, a) => word([[S, 0], [w, 11], [a, KERN - LEAN], [T, 0], [C, 14], [H, KERN]])
 
-const chosen = build(W(4, 7), A(4, 8))
+const chosen = build(W(4, 5), A(4, 8))
 const n = chosen.rows.flat().reduce((k, [, c]) => k + c, 0)
 writeFileSync(new URL("./logo.ts", import.meta.url), `// The SWATCH wordmark as squares: for each row (its y), runs of squares as
 // [x of the first, how many]. Squares are ${SIZE}px on an ${PITCH}px pitch, in a
@@ -98,11 +104,11 @@ if (process.argv.includes("--lab")) {
   const svg = ({ rows, width: w }, label) => `<p>${label}</p><svg viewBox="0 0 ${w} ${ROWS * PITCH - 2}" width="${w}">${rows.map((runs, r) =>
     runs.map(([x, c]) => Array.from({ length: c }, (_, i) => `<rect x="${x + i * PITCH}" y="${r * PITCH}" width="9" height="9" rx="1"/>`).join("")).join("")).join("")}</svg>`
   const variants = [
-    [build(W(4, 6), A(4, 8)), "1. strokes 4 wide, W peak 6 rows"],
-    [build(W(4, 7), A(4, 8)), "2. strokes 4 wide, W peak 7 rows"],
-    [build(W(3, 7), A(3, 8)), "3. strokes 3 wide, W peak 7 rows"],
-    [build(W(3, 11), A(3, 7)), "4. strokes 3 wide, W peak full height"],
-    [build(W(5, 5), A(5, 8)), "5. strokes 5 wide (as the upright stems), W peak 5 rows"],
+    [build(W(4, 4), A(4, 8)), "1. W peak 4 rows"],
+    [build(W(4, 5), A(4, 8)), "2. W peak 5 rows"],
+    [build(W(4, 6), A(4, 8)), "3. W peak 6 rows"],
+    [build(W(4, 7), A(4, 8)), "4. W peak 7 rows (as it was, with the new kerning)"],
+    [build(W(3, 5), A(4, 8)), "5. W strokes 3 wide, peak 5 rows"],
   ]
   writeFileSync(new URL("./logo-lab.html", import.meta.url), `<!doctype html><meta charset="utf-8"><title>logo lab</title>
 <style>body{margin:24px;background:#ebecf0;font:13px system-ui}svg{display:block;fill:#4f46e5;margin-bottom:22px}p{margin:0 0 6px}</style>
