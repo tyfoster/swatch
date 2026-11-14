@@ -2,7 +2,7 @@
 // departure board is made of. Twelve flaps: six spell SWATCH, one stays
 // blank, and five show colours (the chart tokens: swatches). When the page
 // loads each flap runs through its reel, a card at a time, and stops on
-// its own; the letters settle left to right. On a small screen only the
+// its own; the letters settle in a different order every time. On a small screen only the
 // six letters show, each on a colour of its own: the five chart tokens,
 // then black.
 //
@@ -76,18 +76,28 @@ class Flap {
 
 export function mountSign(sign: HTMLElement) {
   const flaps: [Flap, number][] = [
-    // each letter runs a little longer than the one before, so they settle left to right
     ...[...WORD].map((c, i): [Flap, number] => {
       const flap = new Flap(LETTERS, LETTERS.findIndex((f) => f.text === c))
       // numbered, so a small screen (which shows only the letters) can give each its own colour
       flap.el.dataset.letter = String(i + 1)
-      return [flap, 9 + i * 2]
+      return [flap, -1] // how long a letter runs is drawn afresh each time (below)
     }),
     [new Flap(LETTERS, 0, true), 0],
     ...COLOURS.map((_, i): [Flap, number] => [new Flap(COLOURS, i, true), 12 + i]),
   ]
   sign.replaceChildren(...flaps.map(([f]) => f.el))
-  const play = () => flaps.forEach(([f, turns], i) => f.play(turns, 150 + i * 45))
+  // The six letters start together and stop one after another, in an order
+  // shuffled each time the sign runs: each is dealt a different number of
+  // cards to turn. The colours keep their order, and start in turn.
+  const play = () => {
+    const order = [...WORD].map((_, i) => i)
+    for (let i = order.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[order[i], order[j]] = [order[j], order[i]]
+    }
+    let letter = 0
+    flaps.forEach(([f, turns], i) => turns < 0 ? f.play(9 + order[letter++] * 2, 150) : f.play(turns, 150 + i * 45))
+  }
   play()
   // press the sign to run it again
   sign.addEventListener("click", play)
