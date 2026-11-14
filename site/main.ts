@@ -15,8 +15,8 @@ const DURATION = 14 // seconds; matches .logo g in site.css
 const SPREAD = 0.8 // of the cycle laid across the logo: --chart-1 at the left edge, --chart-5 at the right
 const logo = document.getElementById("logo")!
 const columns = new Map<number, SVGGElement>()
-for (const [y, runs] of ROWS) for (const [x0, n] of runs) for (let i = 0; i < n; i++) {
-  const x = x0 + i * PITCH
+for (const [y, runs] of ROWS) for (const [x0, n, pitch = PITCH] of runs) for (let i = 0; i < n; i++) {
+  const x = +(x0 + i * pitch).toFixed(2)
   const col = Math.round(x / PITCH)
   let g = columns.get(col)
   if (!g) {
