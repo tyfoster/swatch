@@ -78,9 +78,16 @@ class Flap {
     this.set(((this.target - turns) % n + n) % n)
     await new Promise((r) => setTimeout(r, wait))
     if (run !== this.run) return
-    while (this.at !== this.target && run === this.run) await this.flip(run)
+    // every card dealt is turned, even round the reel more than once (five
+    // colours, eighteen turns): it starts that many cards before its own
+    for (let k = 0; k < turns && run === this.run; k++) await this.flip(run)
   }
 }
+
+/** How many cards a letter turns, by the place it was dealt: the first to
+ *  stop turns 9, each after it two more. */
+const letterTurns = (place: number) => 9 + place * 2
+const LONGEST = letterTurns(WORD.length - 1)
 
 export function mountSign(sign: HTMLElement) {
   const flaps: [Flap, number][] = [
@@ -91,12 +98,14 @@ export function mountSign(sign: HTMLElement) {
       return [flap, -1] // how long a letter runs is drawn afresh each time (below)
     }),
     [new Flap(LETTERS, 0, true), 0],
-    ...COLOURS.map((_, i): [Flap, number] => [new Flap(COLOURS, i, true), 12 + i]),
+    // the colours settle in order, blue to crimson, the last of them one
+    // card before the last letter: they turn as long as the letters do
+    ...COLOURS.map((_, i): [Flap, number] => [new Flap(COLOURS, i, true), LONGEST - COLOURS.length + i]),
   ]
   sign.replaceChildren(...flaps.map(([f]) => f.el))
   // The six letters start together and stop one after another, in an order
   // shuffled each time the sign runs: each is dealt a different number of
-  // cards to turn. The colours keep their order, and start in turn.
+  // cards to turn. The colours start with them and keep their order.
   const play = () => {
     const order = [...WORD].map((_, i) => i)
     for (let i = order.length - 1; i > 0; i--) {
@@ -104,7 +113,7 @@ export function mountSign(sign: HTMLElement) {
       ;[order[i], order[j]] = [order[j], order[i]]
     }
     let letter = 0
-    flaps.forEach(([f, turns], i) => turns < 0 ? f.play(9 + order[letter++] * 2, 150) : f.play(turns, 150 + i * 45))
+    flaps.forEach(([f, turns]) => f.play(turns < 0 ? letterTurns(order[letter++]) : turns, 150))
   }
   play()
   // press the sign to run it again
