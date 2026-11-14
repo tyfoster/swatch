@@ -60,6 +60,6 @@
     "node": ">=20"
   },
   "bin": {
-    "swatch": "./dist/cli.js"
+    "swatch-token": "dist/cli.js"
   }
 }
