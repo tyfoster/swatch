@@ -2,6 +2,8 @@
 
 Edit your CSS colour tokens live, on the page.
 
+[swatchtoken.com](https://swatchtoken.com)
+
 Swatch is a dev-only panel for [Vite](https://vite.dev) apps. It finds the
 custom properties in your stylesheets, shows each one in light and dark,
 previews every edit on the real app as you type, and writes the result back
