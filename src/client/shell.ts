@@ -16,7 +16,10 @@ export function makeHost(): { host: HTMLElement; mountAt: HTMLElement } {
   // back in. The panel is outside every modal, so it opts out: its own
   // pointer events, and its events stop here before the modal's document
   // listeners can see them.
-  host.style.pointerEvents = "auto"
+  // Out of the page's flow, and no size of its own: everything inside is
+  // fixed-position, so the host needs none. In the flow it would add a line
+  // (or, under a full-height body, a whole screen) to the page's height.
+  host.style.cssText = "position:fixed;top:0;left:0;width:0;height:0;pointer-events:auto"
   for (const type of ["pointerdown", "mousedown", "touchstart", "wheel", "touchmove", "focusin", "focusout", "keydown"])
     host.addEventListener(type, (e) => e.stopPropagation())
   // and a dialog's focus trap pulls focus back whenever it moves to
@@ -33,14 +36,14 @@ export function makeHost(): { host: HTMLElement; mountAt: HTMLElement } {
   // the panel's inline styles count on.
   const style = document.createElement("style")
   style.textContent = `
-    :host { all: initial; }
+    :host { all: initial; position: fixed; top: 0; left: 0; width: 0; height: 0; }
     *, *::before, *::after { box-sizing: border-box; }
     button, input { margin: 0; font: inherit; color: inherit; }
     button { appearance: none; }
     code { font-family: ${MONO}; }
     input::placeholder { color: #6f6f78; }
     :focus-visible { outline: 2px solid #8e80f9; outline-offset: 1px; }
-    .swatch { font: 12px/1.4 ${FONT}; color: #ececec; height: 100%; }
+    .swatch { font: 12px/1.4 ${FONT}; color: #ececec; }
   `
   const mountAt = document.createElement("div")
   mountAt.className = "swatch"

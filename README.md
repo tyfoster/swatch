@@ -90,11 +90,18 @@ swatch({
 })
 ```
 
-Saving is only accepted from the page on your dev server. Behind a tunnel
-or a forwarded port, add its host to Vite's `server.allowedHosts` (which
-Vite asks for anyway) or its origin to `allowedOrigins`. A dev server opened
-to the network with `--host` takes saves from browsers on the page, but not
-from scripts on other machines.
+### Who can save
+
+A save is accepted only when it carries a key the plugin makes each time
+the dev server starts and gives to the panel, is sent as JSON, and comes
+from your dev server's own page. A page on another site, or on another port
+of your machine, cannot save. Behind a proxy that sets `X-Forwarded-Host`
+nothing more is needed; behind one that does not, add its origin to
+`allowedOrigins`.
+
+Swatch does not make an exposed dev server private: if you open it to a
+network (`vite --host`) or put it behind a tunnel, anyone who can load its
+pages can use the panel, as they can use the rest of the dev server.
 
 ## Working with a coding agent
 
@@ -137,11 +144,16 @@ The agent's tools:
 | `swatch_propose_edits` | Shows values in the panel as unsaved edits; writes no file |
 | `swatch_write_tokens` | Writes values straight into the stylesheets |
 
-`npx swatch-token mcp` finds the stylesheets the same way the plugin does; pass
-`--css src/tokens.css` (and `--src src`) if you set those options there.
+`npx swatch-token mcp` finds the stylesheets the same way the plugin does.
+If you set `css`, `src` or `ignore` on the plugin, pass the same to the
+server, so the agent sees what the panel sees:
 
-Requests are kept in `.swatch/` at the project root: add it to
-`.gitignore`.
+```bash
+claude mcp add swatch -- npx swatch-token mcp --css src/tokens.css --src src --ignore storybook-static
+```
+
+Requests are kept in `.swatch/` at the project root. The folder carries its
+own `.gitignore`, so it is never committed.
 
 ## Frameworks
 

@@ -7,7 +7,7 @@
  */
 import { after, before, test } from "node:test"
 import assert from "node:assert/strict"
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, utimesSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { createServer, type ViteDevServer } from "vite"
@@ -15,10 +15,11 @@ import { createServer, type ViteDevServer } from "vite"
 import swatch from "../src/vite.ts"
 import { refuseWrite } from "../src/server/guard.ts"
 import { Project } from "../src/server/project.ts"
+import { commit, plan, writeAll } from "../src/server/files.ts"
 import { Queue } from "../src/server/requests.ts"
 
 const STYLE = ":root {\n  --card: #f4f4f6;\n}\n.dark {\n  --card: #1d1d22;\n}\n"
-let root = "", server: ViteDevServer, base = ""
+let root = "", server: ViteDevServer, base = "", key = ""
 
 before(async () => {
   root = mkdtempSync(join(tmpdir(), "swatch-routes-"))
@@ -28,11 +29,18 @@ before(async () => {
   await server.listen()
   const address = server.httpServer!.address() as { port: number }
   base = `http://127.0.0.1:${address.port}`
+  // the session key, as the panel finds it on its script tag
+  const html = await server.transformIndexHtml("/index.html", readFileSync(join(root, "index.html"), "utf8"))
+  key = /data-swatch-key="([0-9a-f]+)"/.exec(html)?.[1] ?? ""
 })
 after(async () => { await server?.close() })
 
-const post = (path: string, body: unknown, headers: Record<string, string> = {}) =>
-  fetch(base + path, { method: "POST", body: typeof body === "string" ? body : JSON.stringify(body), headers })
+/** A write as the panel sends it (its key, JSON, its origin), with `headers` laid over that. */
+const post = (path: string, body: unknown, headers: Record<string, string | undefined> = {}) => {
+  const all: Record<string, string> = {}
+  for (const [k, v] of Object.entries({ "x-swatch-key": key, "content-type": "application/json", origin: base, ...headers })) if (v !== undefined) all[k] = v
+  return fetch(base + path, { method: "POST", body: typeof body === "string" ? body : JSON.stringify(body), headers: all })
+}
 
 test("GET /__swatch lists the tokens", async () => {
   const r = await fetch(base + "/__swatch")
@@ -42,16 +50,17 @@ test("GET /__swatch lists the tokens", async () => {
   assert.equal(sheet.tokens.find((t: { name: string }) => t.name === "--card").dark, "#1d1d22")
 })
 
-test("the page's script names the project, by a hash and not its path", async () => {
+test("the page's script names the project, by a hash and not its path, and carries the session key", async () => {
   const html = await server.transformIndexHtml("/index.html", readFileSync(join(root, "index.html"), "utf8"))
   const id = /data-swatch-project="([0-9a-f]+)"/.exec(html)?.[1]
   assert.ok(id && id.length === 12)
   assert.ok(!html.includes(root))
+  assert.equal(key.length, 48)
 })
 
 test("a save from the page writes the stylesheet, and the version moves", async () => {
   const v0 = await (await fetch(base + "/__swatch/version")).json()
-  const r = await post("/__swatch", [{ theme: "light", name: "--card", value: "#eeeeee" }], { origin: base })
+  const r = await post("/__swatch", [{ theme: "light", name: "--card", value: "#eeeeee" }])
   assert.equal(r.status, 200)
   assert.deepEqual((await r.json()).changes, [{ name: "--card", theme: "light", from: "#f4f4f6", to: "#eeeeee" }])
   assert.match(readFileSync(join(root, "style.css"), "utf8"), /--card: #eeeeee;/)
@@ -77,47 +86,64 @@ test("unknown routes are 404, wrong methods 405, and too large a body 413", asyn
   assert.equal((await fetch(base + "/__swatch/nope")).status, 404)
   assert.equal((await fetch(base + "/__swatch/version", { method: "POST", headers: { origin: base } })).status, 405)
   assert.equal((await fetch(base + "/__swatch", { method: "DELETE", headers: { origin: base } })).status, 405)
-  const big = await post("/__swatch", "x".repeat(1_100_000), { origin: base })
+  const big = await post("/__swatch", "x".repeat(1_100_000))
   assert.equal(big.status, 413)
 })
 
 test("a value that would break the stylesheet is a 400, and nothing is written", async () => {
-  const r = await post("/__swatch", [{ theme: "light", name: "--card", value: "rgb(0 0 0" }], { origin: base })
+  const r = await post("/__swatch", [{ theme: "light", name: "--card", value: "rgb(0 0 0" }])
   assert.equal(r.status, 400)
   assert.equal(readFileSync(join(root, "style.css"), "utf8"), STYLE)
 })
 
+test("a write without the session key, or not sent as JSON, is refused, and nothing is written", async () => {
+  const edit = [{ theme: "light", name: "--card", value: "red" }]
+  assert.equal((await post("/__swatch", edit, { "x-swatch-key": undefined })).status, 403)
+  assert.equal((await post("/__swatch", edit, { "x-swatch-key": "0".repeat(48) })).status, 403)
+  // a page on another site can send text/plain without asking first; that is refused
+  assert.equal((await post("/__swatch", edit, { "content-type": "text/plain" })).status, 403)
+  assert.equal((await post("/__swatch/request", { kind: "figma-sync", figma: "https://www.figma.com/design/x/y" }, { "content-type": "text/plain" })).status, 403)
+  assert.equal(readFileSync(join(root, "style.css"), "utf8"), STYLE)
+})
+
 test("who may write", () => {
-  const req = (origin: string | undefined, host: string, remote: string) => ({ headers: { origin, host }, socket: { remoteAddress: remote } })
+  const K = "k".repeat(48)
+  const req = (origin: string | undefined, host: string, remote: string, more: Record<string, string> = {}) =>
+    ({ method: "POST", headers: { "x-swatch-key": K, "content-type": "application/json", origin, host, ...more }, socket: { remoteAddress: remote } })
   // the page itself
-  assert.equal(refuseWrite(req("http://localhost:5173", "localhost:5173", "127.0.0.1")), null)
-  // through a tunnel that rewrites Host: trusted when Vite is told to answer to it
-  assert.ok(refuseWrite(req("https://abc.ngrok.app", "localhost:5173", "127.0.0.1")))
-  assert.equal(refuseWrite(req("https://abc.ngrok.app", "localhost:5173", "127.0.0.1"), { allowedHosts: [".ngrok.app"] }), null)
-  assert.equal(refuseWrite(req("https://abc.ngrok.app", "localhost:5173", "127.0.0.1"), { allowedOrigins: ["https://abc.ngrok.app"] }), null)
-  assert.equal(refuseWrite(req("https://abc.ngrok.app", "localhost:5173", "127.0.0.1"), { allowedHosts: true }), null)
-  // a script with no Origin: from this machine yes, from the network no
-  assert.equal(refuseWrite(req(undefined, "localhost:5173", "127.0.0.1")), null)
-  assert.equal(refuseWrite(req(undefined, "localhost:5173", "::1")), null)
-  assert.ok(refuseWrite(req(undefined, "192.168.1.5:5173", "192.168.1.9")))
-  // a teammate's browser on the network, at the address the server was opened on
-  assert.equal(refuseWrite(req("http://192.168.1.5:5173", "192.168.1.5:5173", "192.168.1.9")), null)
-  // another program on this machine, or on the server's host at another port, even when Vite lists that host
-  assert.ok(refuseWrite(req("http://127.0.0.1:3000", "127.0.0.1:5173", "127.0.0.1"), { allowedHosts: ["127.0.0.1"] }))
-  assert.ok(refuseWrite(req("http://localhost:3000", "localhost:5173", "127.0.0.1"), { allowedHosts: true }))
-  assert.ok(refuseWrite(req("http://192.168.1.5:3000", "192.168.1.5:5173", "192.168.1.9"), { allowedHosts: ["192.168.1.5"] }))
+  assert.equal(refuseWrite(req("http://localhost:5173", "localhost:5173", "127.0.0.1"), K), null)
+  // without the key, or with JSON not declared
+  assert.ok(refuseWrite(req("http://localhost:5173", "localhost:5173", "127.0.0.1"), "other".repeat(10)))
+  assert.ok(refuseWrite(req("http://localhost:5173", "localhost:5173", "127.0.0.1", { "content-type": "text/plain" }), K))
+  // behind a proxy that rewrites Host but says where the browser went
+  assert.equal(refuseWrite(req("https://app.local.dev", "localhost:5173", "127.0.0.1", { "x-forwarded-host": "app.local.dev" }), K), null)
+  // or named in allowedOrigins
+  assert.equal(refuseWrite(req("https://abc.ngrok.app", "localhost:5173", "127.0.0.1"), K, { allowedOrigins: ["https://abc.ngrok.app"] }), null)
+  // another page on a wildcard domain the proxy serves is not this page
+  assert.ok(refuseWrite(req("https://evil.local.dev", "localhost:5173", "127.0.0.1", { "x-forwarded-host": "app.local.dev" }), K))
+  // another program on this machine, at another port
+  assert.ok(refuseWrite(req("http://127.0.0.1:3000", "127.0.0.1:5173", "127.0.0.1"), K))
+  // a script with no Origin: from this machine directly yes; through a local proxy, or from the network, no
+  assert.equal(refuseWrite(req(undefined, "localhost:5173", "127.0.0.1"), K), null)
+  assert.equal(refuseWrite(req(undefined, "localhost:5173", "::1"), K), null)
+  assert.ok(refuseWrite(req(undefined, "localhost:5173", "127.0.0.1", { "x-forwarded-for": "203.0.113.9" }), K))
+  assert.ok(refuseWrite(req(undefined, "localhost:5173", "127.0.0.1", { forwarded: "for=203.0.113.9" }), K))
+  assert.ok(refuseWrite(req(undefined, "192.168.1.5:5173", "192.168.1.9"), K))
 })
 
 test("a save across several stylesheets changes all of them or none", () => {
   const dir = mkdtempSync(join(tmpdir(), "swatch-atomic-"))
   writeFileSync(join(dir, "a.css"), ":root { --a: red; }\n")
-  writeFileSync(join(dir, "b.css"), ":root { --b: blue; }\n")
+  mkdirSync(join(dir, "locked"))
+  writeFileSync(join(dir, "locked", "b.css"), ":root { --b: blue; }\n")
   const project = new Project(dir)
-  // b.css cannot be written: a's change must not stay behind
-  chmodSync(join(dir, "b.css"), 0o444)
-  assert.throws(() => project.write([{ theme: "light", name: "--a", value: "green" }, { theme: "light", name: "--b", value: "navy" }]), /nothing was saved/)
-  assert.equal(readFileSync(join(dir, "a.css"), "utf8"), ":root { --a: red; }\n")
-  chmodSync(join(dir, "b.css"), 0o644)
+  // b.css's folder cannot be written to: a's change must not stay behind
+  chmodSync(join(dir, "locked"), 0o555)
+  try {
+    assert.throws(() => project.write([{ theme: "light", name: "--a", value: "green" }, { theme: "light", name: "--b", value: "navy" }]), /nothing was saved/)
+    assert.equal(readFileSync(join(dir, "a.css"), "utf8"), ":root { --a: red; }\n")
+    assert.equal(readFileSync(join(dir, "locked", "b.css"), "utf8"), ":root { --b: blue; }\n")
+  } finally { chmodSync(join(dir, "locked"), 0o755) }
 })
 
 test("folders named public, build or vendor are searched; node_modules, hidden folders and the build output are not", () => {
@@ -143,3 +169,33 @@ test("a request dealt with leaves the queue, and the log keeps only the last hun
   const late = queue.add({ kind: "figma-sync", figma: "https://www.figma.com/design/x/z" }, []).id
   assert.ok(queue.pending().some((r) => r.id === late))
 })
+
+test("a stylesheet that changed on disk after it was read is not written over", () => {
+  const dir = mkdtempSync(join(tmpdir(), "swatch-race-"))
+  const file = join(dir, "a.css")
+  writeFileSync(file, ":root { --a: red; }\n")
+  const planned = plan(new Map([[file, [{ theme: "light" as const, name: "--a", value: "green" }]]]))
+  // an editor saves between Swatch's read and its write
+  writeFileSync(file, ":root { --a: blue; }\n")
+  const later = new Date(Date.now() + 5000)
+  utimesSync(file, later, later)
+  assert.throws(() => commit(planned), /changed on disk/)
+  assert.equal(readFileSync(file, "utf8"), ":root { --a: blue; }\n", "the editor's save stands")
+  // a save with nothing in the way goes through, and leaves no temporary file
+  assert.deepEqual(writeAll(new Map([[file, [{ theme: "light" as const, name: "--a", value: "green" }]]])).map((c) => c.to), ["green"])
+  assert.deepEqual(readdirSync(dir), ["a.css"])
+})
+
+test("the queue's folder ignores itself, so it is never committed", () => {
+  const dir = mkdtempSync(join(tmpdir(), "swatch-ignore-"))
+  new Queue(dir).add({ kind: "figma-sync", figma: "https://www.figma.com/design/x/y" }, [])
+  assert.match(readFileSync(join(dir, ".swatch", ".gitignore"), "utf8"), /^\*$/m)
+})
+
+test("a src folder that does not exist is a warning, not a failed read", () => {
+  const dir = mkdtempSync(join(tmpdir(), "swatch-nosrc-"))
+  writeFileSync(join(dir, "a.css"), ":root { --a: red; }\n")
+  assert.deepEqual(new Project(dir, { src: "no-such-folder" }).read().tokens.map((t) => t.name), ["--a"])
+  assert.ok(!existsSync(join(dir, "no-such-folder")))
+})
+

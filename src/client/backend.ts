@@ -37,12 +37,16 @@ const json = async (r: Response) => {
   if (!r.ok) throw new Error(body?.error ?? `HTTP ${r.status}`)
   return body
 }
+// the session key the plugin put on this script's tag, sent with every
+// write (see server/guard.ts)
+const KEY = typeof document === "undefined" ? "" : document.querySelector<HTMLScriptElement>("script[data-swatch-key]")?.dataset.swatchKey ?? ""
+const writing = { "content-type": "application/json", "x-swatch-key": KEY }
 export const http: Backend = {
   read: () => fetch("/__swatch").then(json),
-  write: (edits) => fetch("/__swatch", { method: "POST", body: JSON.stringify(edits) }).then(json),
-  request: (body) => fetch("/__swatch/request", { method: "POST", body: JSON.stringify(body) }).then(json),
+  write: (edits) => fetch("/__swatch", { method: "POST", headers: writing, body: JSON.stringify(edits) }).then(json),
+  request: (body) => fetch("/__swatch/request", { method: "POST", headers: writing, body: JSON.stringify(body) }).then(json),
   incoming: () => fetch("/__swatch/incoming").then(json),
-  clearIncoming: () => fetch("/__swatch/incoming", { method: "DELETE" }).then(json),
+  clearIncoming: () => fetch("/__swatch/incoming", { method: "DELETE", headers: writing }).then(json),
   // Asks every two seconds whether anything moved, while the tab is in
   // view. Asking, rather than holding a connection open, keeps every tab
   // from taking one of the few connections a browser allows each site.

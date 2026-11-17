@@ -14,6 +14,7 @@
 // The MCP server (mcp.ts) is this file's other reader and writer, so an
 // agent needs no knowledge of these files: it has tools for them.
 import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs"
+import { randomBytes } from "node:crypto"
 import { join } from "node:path"
 import { THEMES, check, type Change, type Theme } from "./stylesheet.ts"
 
@@ -48,9 +49,17 @@ export class Queue {
     } else throw new Error("unknown request")
     const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
     const line: Queued = { ...body, id, at: new Date().toISOString(), files }
-    mkdirSync(this.dir, { recursive: true })
+    this.ensure()
     appendFileSync(join(this.dir, "requests.jsonl"), JSON.stringify(line) + "\n")
     return { id: line.id }
+  }
+
+  /** Makes the folder, with a .gitignore in it that ignores everything, so
+   *  the queue is never committed whatever the project's own .gitignore says. */
+  private ensure() {
+    mkdirSync(this.dir, { recursive: true })
+    const ignore = join(this.dir, ".gitignore")
+    if (!existsSync(ignore)) writeFileSync(ignore, "# written by Swatch: requests for a coding agent, never committed\n*\n")
   }
 
   /** What the agent left, or null (also while it is half written). */
@@ -91,9 +100,9 @@ export class Queue {
         if (!l.trim()) return false
         try { return (JSON.parse(l) as Queued).id !== id } catch { return true }
       })
-      const tmp = `${this.file}.tmp`
+      const tmp = `${this.file}.${process.pid}-${randomBytes(4).toString("hex")}.tmp`
       writeFileSync(tmp, kept.length ? kept.join("\n") + "\n" : "")
-      if (statSync(this.file).size !== Buffer.byteLength(text)) continue // something was added: read again
+      if (statSync(this.file).size !== Buffer.byteLength(text)) { rmSync(tmp, { force: true }); continue } // something was added: read again
       renameSync(tmp, this.file)
       this.seen = null
       const done = join(this.dir, "done.jsonl")
@@ -123,8 +132,8 @@ export class Queue {
       }
     }
     if (!n) throw new Error("no values to propose")
-    mkdirSync(this.dir, { recursive: true })
-    const tmp = `${this.incoming}.tmp`
+    this.ensure()
+    const tmp = `${this.incoming}.${process.pid}-${randomBytes(4).toString("hex")}.tmp`
     writeFileSync(tmp, JSON.stringify({ edits: clean, ...(note ? { note: String(note).slice(0, 300) } : {}) }))
     renameSync(tmp, this.incoming)
     return n

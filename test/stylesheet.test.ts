@@ -16,7 +16,7 @@ import { join } from "node:path"
 
 import { Project } from "../src/server/project.ts"
 import { readSheet, write } from "../src/server/files.ts"
-import { parse } from "../src/server/stylesheet.ts"
+import { parse, writeText } from "../src/server/stylesheet.ts"
 
 const EXAMPLE = join(import.meta.dirname, "../example")
 const CSS = join(EXAMPLE, "src/style.css")
@@ -130,4 +130,23 @@ ok(usesOf('<a className="bg-brand text-brand/60" />', "@theme { --color-brand: #
   ok(tok.get("--warn")?.darkAt?.media === "(prefers-color-scheme: dark)", "a token whose stylesheet selects dark another way carries that")
   ok(tok.get("--bg")?.darkAt === undefined, "…and the rest carry nothing")
 }
+
+// a new dark value goes where the project keeps its dark theme, in its dark selector
+{
+  const d5 = join(dir, "darkhome"); mkdirSync(d5)
+  writeFileSync(join(d5, "base.css"), ":root { --a: red; --new: blue; }\n")
+  writeFileSync(join(d5, "theme.css"), ':root { --b: white; }\n[data-theme="dark"] { --b: black; }\n')
+  new Project(d5).write([{ theme: "dark", name: "--new", value: "navy" }])
+  ok(readFileSync(join(d5, "base.css"), "utf8") === ":root { --a: red; --new: blue; }\n", "the file with no dark block is left alone")
+  ok(readFileSync(join(d5, "theme.css"), "utf8") === ':root { --b: white; }\n[data-theme="dark"] { --b: black; --new: navy; }\n', "…and the dark value goes into the file with the dark theme")
+  const d6 = join(dir, "darkmedia"); mkdirSync(d6)
+  writeFileSync(join(d6, "a.css"), ":root { --a: red; }\n")
+  writeFileSync(join(d6, "b.css"), ":root { --b: white; }\n")
+  const out = writeText(":root { --a: red; }\n", [{ theme: "dark", name: "--a", value: "black" }], "a.css", { selector: ":root", media: "(prefers-color-scheme: dark)" })
+  ok(out.css === ":root { --a: red; }\n@media (prefers-color-scheme: dark) {\n    :root {\n        --a: black\n    }\n}" || /@media \(prefers-color-scheme: dark\)\s*\{\s*:root\s*\{\s*--a: black;?\s*\}\s*\}/.test(out.css), "a new dark block follows the project's media query")
+  ok(/\[data-theme="dark"\]\s*\{\s*--a: black;?\s*\}/.test(writeText(":root { --a: red; }\n", [{ theme: "dark", name: "--a", value: "black" }], "a.css", { selector: '[data-theme="dark"]', media: null }).css), "…or its dark selector")
+}
+// backslashes: an escape is fine, a trailing one is not
+ok(run(':root {\n  --a: red;\n}\n', [{ theme: "light", name: "--a", value: '"\\201C"' }]) === ':root {\n  --a: "\\201C";\n}\n', "an escaped value can be written")
+ok(refused("red\\"), "a value ending in a backslash is refused")
 

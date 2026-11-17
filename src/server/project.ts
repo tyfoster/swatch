@@ -26,8 +26,8 @@ export type Options = {
    *  build output are left out already). */
   ignore?: string[]
   /** Origins besides the dev server's own that may save, e.g. a tunnel's
-   *  "https://my-tunnel.example" (hosts in Vite's `server.allowedHosts`
-   *  are trusted already). */
+   *  "https://my-tunnel.example". A proxy that sets X-Forwarded-Host needs
+   *  none. */
   allowedOrigins?: string[]
 }
 
@@ -49,7 +49,14 @@ const SOURCE = /\.(tsx?|jsx?|mjs|cjs|css|scss|vue|svelte|astro|html|mdx?)$/
 /** Every file under `dir` whose name passes `test`, leaving out
  *  node_modules, hidden folders, and the folders in `skip` (absolute). */
 function walk(dir: string, test: RegExp, skip: Set<string>, acc: string[] = []): string[] {
-  for (const f of readdirSync(dir)) {
+  let entries: string[]
+  // a folder that cannot be read (permissions, or a `src` that does not
+  // exist) is passed over with a warning, not the end of every read
+  try { entries = readdirSync(dir) } catch (err) {
+    console.warn(`[swatch] could not read ${dir}: ${err instanceof Error ? err.message : err}`)
+    return acc
+  }
+  for (const f of entries) {
     if (f === "node_modules" || f.startsWith(".")) continue
     const p = join(dir, f)
     if (skip.has(p)) continue
@@ -207,8 +214,20 @@ export class Project {
     edits.forEach(check)
     const files = this.stylesheets()
     if (!files.length) throw new Error("no stylesheet with tokens was found: name one with the `css` option")
-    const sheets = files.map((file) => ({ file, tokens: readSheet(file).tokens }))
+    const sheets = files.map((file) => { const s = readSheet(file); return { file, tokens: s.tokens, dark: s.dark } })
     const biggest = [...sheets].sort((a, b) => b.tokens.size - a.tokens.size)[0].file
+    // how the project selects dark (the selector most dark values sit
+    // under), for a stylesheet that needs a dark block it has not got
+    const votes = new Map<string, { at: DarkSelector; n: number }>()
+    for (const s of sheets) if (s.dark) {
+      const n = [...s.tokens.values()].filter((t) => t.dark !== undefined).length
+      const k = `${s.dark.media ?? ""}|${s.dark.selector}`
+      votes.set(k, { at: s.dark, n: (votes.get(k)?.n ?? 0) + n })
+    }
+    const darkAt = [...votes.values()].sort((a, b) => b.n - a.n)[0]?.at ?? null
+    // the stylesheet that holds most of the dark theme, for a dark value
+    // whose token lives in a file with no dark block
+    const darkHome = [...sheets].filter((s) => s.dark).sort((a, b) => b.tokens.size - a.tokens.size)[0]?.file
     const holds = (name: string, theme?: Theme) => sheets.filter((s) => {
       const t = s.tokens.get(name)
       return t && (theme ? t[theme] !== undefined : true)
@@ -216,11 +235,13 @@ export class Project {
     const batches = new Map<string, Edit[]>()
     for (const e of edits) {
       const here = holds(e.name, e.theme)
-      const targets = here.length ? here : e.value.trim() === "" ? [] : [holds(e.name).at(-1) ?? biggest]
+      let home = holds(e.name).at(-1) ?? biggest
+      if (e.theme === "dark" && darkHome && !sheets.find((s) => s.file === home)?.dark) home = darkHome
+      const targets = here.length ? here : e.value.trim() === "" ? [] : [home]
       for (const f of targets) batches.set(f, [...(batches.get(f) ?? []), e])
     }
     // every file changes, or none does
-    const changes = writeAll(batches)
+    const changes = writeAll(batches, darkAt)
     // one change per token and theme, however many files held it
     const seen = new Set<string>()
     return changes.filter((c) => { const k = `${c.name}|${c.theme}`; if (seen.has(k)) return false; seen.add(k); return true })

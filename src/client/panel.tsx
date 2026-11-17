@@ -268,9 +268,13 @@ const IMPORTANT = /\s*!important\s*$/i
  *  colour, so "rgb(0 0 0" would pass as one; in the stylesheet it would
  *  swallow everything after it. */
 function wellFormed(value: string) {
-  if (/[;{}\\\n\r]|\/\*/.test(value)) return false
-  let depth = 0, quote = ""
+  // a backslash escapes the next character; one at the very end would
+  // escape the semicolon after it
+  if (/[;{}\n\r]|\/\*/.test(value) || /(^|[^\\])(\\\\)*\\\s*$/.test(value)) return false
+  let depth = 0, quote = "", escaped = false
   for (const ch of value) {
+    if (escaped) { escaped = false; continue }
+    if (ch === "\\") { escaped = true; continue }
     if (quote) { if (ch === quote) quote = ""; continue }
     if (ch === '"' || ch === "'") quote = ch
     else if (ch === "(") depth++

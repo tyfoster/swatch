@@ -102,7 +102,9 @@ export function check(e: Edit) {
   if (!e || typeof e !== "object") throw new Error("bad edit")
   if (!THEMES.includes(e.theme)) throw new Error(`unknown theme "${e.theme}"`)
   if (typeof e.name !== "string" || !/^--[a-zA-Z0-9_-]+$/.test(e.name)) throw new Error(`bad token name "${e.name}"`)
-  if (typeof e.value !== "string" || /[;{}\n\r\\]/.test(e.value) || e.value.length > 2000) throw new Error(`bad value for ${e.name}`)
+  // a backslash escapes the next character (a CSS escape such as \201C is
+  // fine); one at the very end would escape the semicolon after it
+  if (typeof e.value !== "string" || /[;{}\n\r]/.test(e.value) || /(^|[^\\])(\\\\)*\\\s*$/.test(e.value) || e.value.length > 2000) throw new Error(`bad value for ${e.name}`)
   if (e.value.trim() === "") return
   // the value must stand as one declaration's value: an unclosed comment,
   // quote or bracket would swallow whatever follows it in the file
@@ -118,7 +120,9 @@ export function check(e: Edit) {
 /** The stylesheet with a batch of edits applied, and what each changed. A
  *  failed check, or a result that would not read back as a stylesheet,
  *  throws and gives nothing. */
-export function writeText(css: string, edits: Edit[], from = "stylesheet.css"): { css: string; changes: Change[] } {
+/** `darkAt` is how the project selects its dark theme, used when this
+ *  stylesheet has no dark block yet and needs one (".dark" without it). */
+export function writeText(css: string, edits: Edit[], from = "stylesheet.css", darkAt?: DarkSelector | null): { css: string; changes: Change[] } {
   edits.forEach(check)
   const parsed = parse(css, from)
   const changes: Change[] = []
@@ -166,9 +170,11 @@ export function writeText(css: string, edits: Edit[], from = "stylesheet.css"): 
       continue
     }
     if (!parsed.blocks[theme].length) {
-      // a stylesheet with no block for this theme yet gets one at its end
-      const rule = postcss.rule({ selector: theme === "dark" ? ".dark" : ":root" })
-      parsed.root.append(rule)
+      // a stylesheet with no block for this theme yet gets one at its end,
+      // selected the way the project selects that theme
+      const rule = postcss.rule({ selector: theme === "dark" ? (darkAt?.media ? ":root" : darkAt?.selector ?? ".dark") : ":root" })
+      if (theme === "dark" && darkAt?.media) parsed.root.append(postcss.atRule({ name: "media", params: darkAt.media, nodes: [rule] }))
+      else parsed.root.append(rule)
       parsed.blocks[theme].push(rule)
     }
     // a new token goes into the first block of each way the theme is

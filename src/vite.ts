@@ -13,7 +13,7 @@
 //   DELETE /__swatch/incoming   the panel has taken it
 //
 // Writes (POST and DELETE) are held to server/guard.ts.
-import { createHash } from "node:crypto"
+import { createHash, randomBytes } from "node:crypto"
 import { readFileSync } from "node:fs"
 import type { IncomingMessage, ServerResponse } from "node:http"
 import { fileURLToPath } from "node:url"
@@ -36,6 +36,9 @@ export default function swatch(options: Options = {}): Plugin {
   // on the same port never share unsaved edits; a hash, so the page never
   // carries the project's path
   let id = ""
+  // the session key the panel sends with every write (server/guard.ts):
+  // new each time the dev server starts
+  const key = randomBytes(24).toString("hex")
   return {
     name: "swatch",
     apply: "serve",
@@ -43,11 +46,10 @@ export default function swatch(options: Options = {}): Plugin {
       project = new Project(config.root, options, [config.build.outDir, config.cacheDir, config.publicDir].filter(Boolean))
       queue = new Queue(config.root)
       id = createHash("sha256").update(project.root).digest("hex").slice(0, 12)
-      const hosts = config.server.allowedHosts
-      trust = { allowedHosts: hosts === true ? true : Array.isArray(hosts) ? hosts : undefined, allowedOrigins: options.allowedOrigins }
+      trust = { allowedOrigins: options.allowedOrigins }
     },
     transformIndexHtml: () => [
-      { tag: "script", attrs: { type: "module", src: "/__swatch/client.js", "data-swatch-project": id }, injectTo: "body" },
+      { tag: "script", attrs: { type: "module", src: "/__swatch/client.js", "data-swatch-project": id, "data-swatch-key": key }, injectTo: "body" },
     ],
     configureServer(server) {
       // The panel asks every couple of seconds whether anything moved: a
@@ -82,7 +84,7 @@ export default function swatch(options: Options = {}): Plugin {
         if (!routes[route]) return send(404, { error: "no such route" })
         if (!routes[route].includes(method)) return send(405, { error: `${routes[route].join(" or ")} only` })
         if (method !== "GET") {
-          const why = refuseWrite(req, trust)
+          const why = refuseWrite(req, key, trust)
           if (why) return send(403, { error: why })
         }
         if (route === "/client.js") {

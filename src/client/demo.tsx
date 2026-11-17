@@ -64,8 +64,9 @@ export function mountDemo({ target, file, css, sources = {}, groups, onSave }: D
 
   const { host, mountAt } = makeHost()
   if (target) {
-    host.style.display = "block"
-    host.style.height = "100%"
+    // docked in the page: the host and the mount fill their container
+    host.style.cssText = "display:block;height:100%;pointer-events:auto"
+    mountAt.style.height = "100%"
     target.appendChild(host)
   } else document.body.appendChild(host)
   createRoot(mountAt).render(<Playground backend={backend} docked={!!target} />)
