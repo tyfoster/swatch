@@ -8,6 +8,7 @@
 //   POST   /__swatch            [{ theme, name, value }] writes values; answers as GET, plus `changes`
 //   GET    /__swatch/version    { css, incoming }: counters that move when a stylesheet changes or an agent answers
 //   GET    /__swatch/client.js  the panel
+//   GET    /__swatch/key        { key }: the session key, for a panel whose script tag was written by hand
 //   POST   /__swatch/request    leaves a request for a coding agent (server/requests.ts)
 //   GET    /__swatch/incoming   what the agent left, or null
 //   DELETE /__swatch/incoming   the panel has taken it
@@ -18,7 +19,7 @@ import { readFileSync } from "node:fs"
 import type { IncomingMessage, ServerResponse } from "node:http"
 import { fileURLToPath } from "node:url"
 import type { Plugin } from "vite"
-import { refuseWrite, type Trust } from "./server/guard.ts"
+import { STALE_KEY, refuseKey, refuseWrite, type Trust } from "./server/guard.ts"
 import { Project, type Options } from "./server/project.ts"
 import { Queue, type Request } from "./server/requests.ts"
 import type { Edit } from "./server/stylesheet.ts"
@@ -46,7 +47,8 @@ export default function swatch(options: Options = {}): Plugin {
       project = new Project(config.root, options, [config.build.outDir, config.cacheDir, config.publicDir].filter(Boolean))
       queue = new Queue(config.root)
       id = createHash("sha256").update(project.root).digest("hex").slice(0, 12)
-      trust = { allowedOrigins: options.allowedOrigins }
+      const hosts = config.server.allowedHosts
+      trust = { allowedOrigins: options.allowedOrigins, allowedHosts: Array.isArray(hosts) ? hosts : undefined }
     },
     transformIndexHtml: () => [
       { tag: "script", attrs: { type: "module", src: "/__swatch/client.js", "data-swatch-project": id, "data-swatch-key": key }, injectTo: "body" },
@@ -58,18 +60,22 @@ export default function swatch(options: Options = {}): Plugin {
       // connection open, keeps every tab from taking one of the few
       // connections a browser allows each site.
       const version = { css: 0, incoming: 0 }
+      // Swatch's own files are not the project's: the queue's folder, and
+      // the temporary file a save writes beside a stylesheet
+      const ours = (f: string) => f.startsWith(queue.dir) || /\.swatch-[^\\/]*\.tmp$/.test(f)
       const changed = (f: string, listChanged: boolean) => {
+        if (f === queue.incoming) { version.incoming++; return }
+        if (ours(f)) return
         project.forget(f, listChanged)
-        if (f === queue.incoming) version.incoming++
-        else if (f.endsWith(".css")) version.css++
+        if (f.endsWith(".css")) version.css++
       }
       project.watch()
       server.watcher.add(queue.dir)
       server.watcher.on("change", (f) => changed(f, false))
       server.watcher.on("add", (f) => changed(f, true))
       server.watcher.on("unlink", (f) => changed(f, true))
-      server.watcher.on("addDir", (f) => project.forget(f, true))
-      server.watcher.on("unlinkDir", (f) => project.forget(f, true))
+      server.watcher.on("addDir", (f) => { if (!ours(f)) project.forget(f, true) })
+      server.watcher.on("unlinkDir", (f) => { if (!ours(f)) project.forget(f, true) })
 
       server.middlewares.use("/__swatch", (req: IncomingMessage, res: ServerResponse) => {
         const send = (code: number, body: unknown) => {
@@ -80,12 +86,20 @@ export default function swatch(options: Options = {}): Plugin {
         }
         const route = (req.url ?? "/").split("?")[0]
         const method = req.method ?? ""
-        const routes: Record<string, string[]> = { "/": ["GET", "POST"], "/version": ["GET"], "/client.js": ["GET"], "/request": ["POST"], "/incoming": ["GET", "DELETE"] }
+        const routes: Record<string, string[]> = { "/": ["GET", "POST"], "/version": ["GET"], "/client.js": ["GET"], "/key": ["GET"], "/request": ["POST"], "/incoming": ["GET", "DELETE"] }
         if (!routes[route]) return send(404, { error: "no such route" })
         if (!routes[route].includes(method)) return send(405, { error: `${routes[route].join(" or ")} only` })
         if (method !== "GET") {
           const why = refuseWrite(req, key, trust)
-          if (why) return send(403, { error: why })
+          if (why) {
+            // the panel answers this one by asking for the key again
+            if (why === STALE_KEY) res.setHeader("x-swatch-refused", "key")
+            return send(403, { error: why })
+          }
+        }
+        if (route === "/key") {
+          const why = refuseKey(req, trust)
+          return why ? send(403, { error: why }) : send(200, { key })
         }
         if (route === "/client.js") {
           res.setHeader("content-type", "text/javascript")

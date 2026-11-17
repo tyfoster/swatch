@@ -6,7 +6,7 @@ import { createRoot } from "react-dom/client"
 import { readText, writeText } from "../server/stylesheet.ts"
 import type { Backend, Sheet } from "./backend.ts"
 import { Playground } from "./panel.tsx"
-import { makeHost } from "./shell.ts"
+import { DOCKED, makeHost } from "./shell.ts"
 
 export type Demo = {
   /** where the panel goes, docked and always open; left out, it floats in
@@ -65,7 +65,7 @@ export function mountDemo({ target, file, css, sources = {}, groups, onSave }: D
   const { host, mountAt } = makeHost()
   if (target) {
     // docked in the page: the host and the mount fill their container
-    host.style.cssText = "display:block;height:100%;pointer-events:auto"
+    host.style.cssText = DOCKED
     mountAt.style.height = "100%"
     target.appendChild(host)
   } else document.body.appendChild(host)

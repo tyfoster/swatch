@@ -208,7 +208,9 @@ export class Project {
   /** Sends each edit to the stylesheet that holds the token in that theme;
    *  failing that, the one that holds it in the other theme; failing that
    *  (a new token), the one with the most tokens. Every edit is checked,
-   *  and every file's new text worked out, before any file is touched. */
+   *  and every file's new text worked out, before any file is touched. An
+   *  edit that says what it expects to replace (`was`) is refused, with
+   *  the whole batch, when the stylesheets hold something else. */
   write(edits: Edit[]): Change[] {
     if (!Array.isArray(edits)) throw new Error("expected a list of edits")
     edits.forEach(check)
@@ -225,9 +227,17 @@ export class Project {
       votes.set(k, { at: s.dark, n: (votes.get(k)?.n ?? 0) + n })
     }
     const darkAt = [...votes.values()].sort((a, b) => b.n - a.n)[0]?.at ?? null
-    // the stylesheet that holds most of the dark theme, for a dark value
-    // whose token lives in a file with no dark block
-    const darkHome = [...sheets].filter((s) => s.dark).sort((a, b) => b.tokens.size - a.tokens.size)[0]?.file
+    // what the project holds for a token now, as read() gives it
+    const held = (name: string, theme: Theme) => {
+      let v: string | null = null
+      for (const s of sheets) { const here = s.tokens.get(name)?.[theme]; if (here !== undefined) v = here }
+      return v
+    }
+    for (const e of edits) {
+      if (e.was === undefined) continue
+      const now = held(e.name, e.theme)
+      if (now !== e.was) throw new Error(`${e.name} changed in the stylesheet since it was read (${e.was ?? "not set"} then, ${now ?? "not set"} now), so nothing was saved; save again to write over it`)
+    }
     const holds = (name: string, theme?: Theme) => sheets.filter((s) => {
       const t = s.tokens.get(name)
       return t && (theme ? t[theme] !== undefined : true)
@@ -235,9 +245,11 @@ export class Project {
     const batches = new Map<string, Edit[]>()
     for (const e of edits) {
       const here = holds(e.name, e.theme)
-      let home = holds(e.name).at(-1) ?? biggest
-      if (e.theme === "dark" && darkHome && !sheets.find((s) => s.file === home)?.dark) home = darkHome
-      const targets = here.length ? here : e.value.trim() === "" ? [] : [home]
+      // A value in a theme the token's stylesheet has no block for stays in
+      // that stylesheet, in a new block after the one that declares it (so
+      // it is the later of the two wherever the file is loaded), selected
+      // the way the project selects dark.
+      const targets = here.length ? here : e.value.trim() === "" ? [] : [holds(e.name).at(-1) ?? biggest]
       for (const f of targets) batches.set(f, [...(batches.get(f) ?? []), e])
     }
     // every file changes, or none does

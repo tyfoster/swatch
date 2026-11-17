@@ -757,14 +757,19 @@ export function Playground({ backend = http, docked = false }: { backend?: Backe
     setStatus("Saving…")
     setBusy(true)
     try {
-      const body = await backend.write(batch)
+      // with what the panel last read for each, so a value changed in the
+      // file since (in an editor, say) is not written over unseen
+      const read = new Map((sheetRef.current?.tokens ?? tokens).map((t) => [t.name, t]))
+      const body = await backend.write(batch.map((b) => ({ ...b, was: read.get(b.name)?.[b.theme] ?? null })))
       const next = [...journal, ...(body.changes ?? [])]
       sheetRef.current = body
       setSheet(body)
       setJournal(next)
       return { sheet: body, journal: next }
     } catch (e) {
-      setStatus(`Could not save: ${e}`)
+      setStatus(`Could not save: ${e instanceof Error ? e.message : e}`)
+      // the file may have moved on: show what it holds now
+      backend.read().then((s) => { sheetRef.current = s; setSheet(s) }).catch(() => {})
       return null
     } finally {
       setBusy(false)

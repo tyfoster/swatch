@@ -1,5 +1,5 @@
 // The stylesheet reader and writer, on files.
-import { readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs"
+import { accessSync, chmodSync, constants, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { randomBytes } from "node:crypto"
 import { basename, dirname, join } from "node:path"
 import { readText, writeText, type Change, type DarkSelector, type Edit } from "./stylesheet.ts"
@@ -18,15 +18,27 @@ export function readSheet(file: string) {
 /** Replaces a file's contents in one step: written whole to a file of its
  *  own beside it, then renamed over it, so a crash never leaves half a
  *  stylesheet. (A dev server's watcher sees the rename as the file
- *  changing.) The temporary name is unique, so two writers never share it. */
+ *  changing.) The temporary name is unique, so two writers never share it.
+ *
+ *  The file stays the file it was: a link is followed and what it points
+ *  to replaced, the permissions are kept, and a file the user cannot write
+ *  to is refused, as writing in place would. Where a rename cannot be
+ *  used (a file with other names, a folder that takes no new files, a
+ *  file another program holds open on Windows) it is written in place. */
 export function replace(file: string, text: string) {
-  const tmp = join(dirname(file), `.${basename(file)}.swatch-${process.pid}-${randomBytes(4).toString("hex")}.tmp`)
+  const real = realpathSync(file)
+  const { mode, nlink } = statSync(real)
+  accessSync(real, constants.W_OK)
+  if (nlink > 1) return writeFileSync(real, text)
+  const tmp = join(dirname(real), `.${basename(real)}.swatch-${process.pid}-${randomBytes(4).toString("hex")}.tmp`)
   try {
-    writeFileSync(tmp, text)
-    renameSync(tmp, file)
+    writeFileSync(tmp, text, { mode })
+    chmodSync(tmp, mode & 0o7777) // the mode asked for above is cut by the umask
+    renameSync(tmp, real)
   } catch (err) {
     rmSync(tmp, { force: true })
-    throw err
+    if (!["EPERM", "EBUSY", "EACCES", "EXDEV"].includes((err as NodeJS.ErrnoException).code ?? "")) throw err
+    writeFileSync(real, text)
   }
 }
 
@@ -53,7 +65,11 @@ export function plan(batches: Map<string, Edit[]>, darkAt?: DarkSelector | null)
  *  is written. If a write fails part-way, the files already written are
  *  put back as they were. Either all of them change or none. */
 export function commit(planned: Plan): Change[] {
-  const moved = planned.find((p) => { const s = statSync(p.file); return s.mtimeMs !== p.mtimeMs || s.size !== p.size })
+  // (the wider gap, between the panel reading a value and saving over it,
+  // is closed by an edit's `was`, in Project.write)
+  const moved = planned.find((p) => {
+    try { const s = statSync(p.file); return s.mtimeMs !== p.mtimeMs || s.size !== p.size } catch { return true } // gone
+  })
   if (moved) throw new Error(`${basename(moved.file)} changed on disk while saving, so nothing was saved; try again`)
   const done: Plan = []
   try {

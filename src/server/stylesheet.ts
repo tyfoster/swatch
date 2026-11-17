@@ -11,7 +11,9 @@ import postcss, { type AtRule, type Container, type Declaration, type Root, type
 
 export type Theme = "light" | "dark"
 export const THEMES: Theme[] = ["light", "dark"]
-export type Edit = { theme: Theme; name: string; value: string }
+/** `was`, when given, is the value the caller last read for it (null:
+ *  none); the project refuses the edit if that is no longer what is held. */
+export type Edit = { theme: Theme; name: string; value: string; was?: string | null }
 export type Change = { name: string; theme: Theme; from: string | null; to: string | null }
 
 // ── Which blocks are a theme ─────────────────────────────────────────────
@@ -105,6 +107,7 @@ export function check(e: Edit) {
   // a backslash escapes the next character (a CSS escape such as \201C is
   // fine); one at the very end would escape the semicolon after it
   if (typeof e.value !== "string" || /[;{}\n\r]/.test(e.value) || /(^|[^\\])(\\\\)*\\\s*$/.test(e.value) || e.value.length > 2000) throw new Error(`bad value for ${e.name}`)
+  if (e.was !== undefined && e.was !== null && typeof e.was !== "string") throw new Error(`bad edit for ${e.name}`)
   if (e.value.trim() === "") return
   // the value must stand as one declaration's value: an unclosed comment,
   // quote or bracket would swallow whatever follows it in the file

@@ -95,13 +95,22 @@ swatch({
 A save is accepted only when it carries a key the plugin makes each time
 the dev server starts and gives to the panel, is sent as JSON, and comes
 from your dev server's own page. A page on another site, or on another port
-of your machine, cannot save. Behind a proxy that sets `X-Forwarded-Host`
-nothing more is needed; behind one that does not, add its origin to
-`allowedOrigins`.
+of your machine, cannot save.
+
+The dev server's own page means the address your browser shows:
+`localhost`, an IP address, or a host name listed in Vite's
+`server.allowedHosts`. Behind a proxy that sets `X-Forwarded-Host` nothing
+more is needed. For any other address (a tunnel that rewrites the Host
+header, a custom host name with `allowedHosts: true`), add its origin to
+`allowedOrigins`; a refused save says which origin to add.
 
 Swatch does not make an exposed dev server private: if you open it to a
 network (`vite --host`) or put it behind a tunnel, anyone who can load its
 pages can use the panel, as they can use the rest of the dev server.
+
+A save never writes over a change it has not seen: if a value was changed
+in the file after the panel read it, the save stops and shows the new
+value, and saving again writes over it.
 
 ## Working with a coding agent
 

@@ -137,8 +137,10 @@ ok(usesOf('<a className="bg-brand text-brand/60" />', "@theme { --color-brand: #
   writeFileSync(join(d5, "base.css"), ":root { --a: red; --new: blue; }\n")
   writeFileSync(join(d5, "theme.css"), ':root { --b: white; }\n[data-theme="dark"] { --b: black; }\n')
   new Project(d5).write([{ theme: "dark", name: "--new", value: "navy" }])
-  ok(readFileSync(join(d5, "base.css"), "utf8") === ":root { --a: red; --new: blue; }\n", "the file with no dark block is left alone")
-  ok(readFileSync(join(d5, "theme.css"), "utf8") === ':root { --b: white; }\n[data-theme="dark"] { --b: black; --new: navy; }\n', "…and the dark value goes into the file with the dark theme")
+  // in the token's own stylesheet, after its light value, so it wins wherever the file is loaded
+  ok(/^:root \{ --a: red; --new: blue; \}\n\[data-theme="dark"\]\s*\{\s*--new: navy;?\s*\}\s*$/.test(readFileSync(join(d5, "base.css"), "utf8")), "a new dark value stays in the token's stylesheet, under the project's dark selector")
+  ok(readFileSync(join(d5, "theme.css"), "utf8") === ':root { --b: white; }\n[data-theme="dark"] { --b: black; }\n', "…and the stylesheet that holds the dark theme is left alone")
+  ok(!/\.dark/.test(readFileSync(join(d5, "base.css"), "utf8")), "no .dark is invented")
   const d6 = join(dir, "darkmedia"); mkdirSync(d6)
   writeFileSync(join(d6, "a.css"), ":root { --a: red; }\n")
   writeFileSync(join(d6, "b.css"), ":root { --b: white; }\n")

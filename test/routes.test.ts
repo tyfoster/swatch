@@ -7,13 +7,13 @@
  */
 import { after, before, test } from "node:test"
 import assert from "node:assert/strict"
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, utimesSync, writeFileSync } from "node:fs"
+import { chmodSync, existsSync, lstatSync, statSync, symlinkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, utimesSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { createServer, type ViteDevServer } from "vite"
 
 import swatch from "../src/vite.ts"
-import { refuseWrite } from "../src/server/guard.ts"
+import { STALE_KEY, refuseKey, refuseWrite } from "../src/server/guard.ts"
 import { Project } from "../src/server/project.ts"
 import { commit, plan, writeAll } from "../src/server/files.ts"
 import { Queue } from "../src/server/requests.ts"
@@ -106,6 +106,26 @@ test("a write without the session key, or not sent as JSON, is refused, and noth
   assert.equal(readFileSync(join(root, "style.css"), "utf8"), STYLE)
 })
 
+test("a panel whose script tag was written by hand, or outlived a restart, is given the key; no other page is", async () => {
+  const own = { "sec-fetch-site": "same-origin", referer: base + "/" }
+  const got = await fetch(base + "/__swatch/key", { headers: own })
+  assert.deepEqual(await got.json(), { key })
+  assert.equal((await fetch(base + "/__swatch/key", { headers: { "sec-fetch-site": "cross-site", referer: "https://evil.example/" } })).status, 403)
+  assert.equal((await fetch(base + "/__swatch/key", { headers: { "sec-fetch-site": "same-site" } })).status, 403)
+  assert.equal((await fetch(base + "/__swatch/key")).status, 403, "a program with neither header")
+  // an old key is refused in a way the panel can tell apart, so it asks again
+  const stale = await post("/__swatch", [], { "x-swatch-key": "0".repeat(48) })
+  assert.equal(stale.headers.get("x-swatch-refused"), "key")
+  assert.equal((await stale.json()).error, STALE_KEY)
+  const g = (headers: Record<string, string>, host = "localhost:5173") => ({ method: "GET", headers: { host, ...headers }, socket: { remoteAddress: "127.0.0.1" } })
+  // plain http on a network address: browsers send no Sec-Fetch-Site there, so the Referer decides
+  assert.equal(refuseKey(g({ referer: "http://192.168.1.5:5173/app" }, "192.168.1.5:5173")), null)
+  assert.ok(refuseKey(g({ referer: "http://192.168.1.7:3000/" }, "192.168.1.5:5173")))
+  // a rebound domain is same-origin to the browser, and still not given the key
+  assert.ok(refuseKey(g({ "sec-fetch-site": "same-origin", referer: "http://evil.example:5173/" }, "evil.example:5173")))
+  assert.ok(refuseKey(g({ "sec-fetch-site": "same-origin" }, "evil.example:5173")))
+})
+
 test("who may write", () => {
   const K = "k".repeat(48)
   const req = (origin: string | undefined, host: string, remote: string, more: Record<string, string> = {}) =>
@@ -123,6 +143,18 @@ test("who may write", () => {
   assert.ok(refuseWrite(req("https://evil.local.dev", "localhost:5173", "127.0.0.1", { "x-forwarded-host": "app.local.dev" }), K))
   // another program on this machine, at another port
   assert.ok(refuseWrite(req("http://127.0.0.1:3000", "127.0.0.1:5173", "127.0.0.1"), K))
+  // a domain pointed at this machine (DNS rebinding) is its own page by Origin and Host, and still refused
+  assert.match(refuseWrite(req("http://evil.example:5173", "evil.example:5173", "127.0.0.1"), K) ?? "", /not a name the dev server is known by.*allowedOrigins/)
+  // unless Vite is told the name, or Swatch is; an address needs neither
+  assert.equal(refuseWrite(req("http://dev.box:5173", "dev.box:5173", "127.0.0.1"), K, { allowedHosts: [".box"] }), null)
+  assert.equal(refuseWrite(req("http://dev.box:5173", "dev.box:5173", "127.0.0.1"), K, { allowedOrigins: ["http://dev.box:5173"] }), null)
+  assert.equal(refuseWrite(req("http://192.168.1.5:5173", "192.168.1.5:5173", "192.168.1.9"), K), null)
+  assert.equal(refuseWrite(req("http://[::1]:5173", "[::1]:5173", "::1"), K), null)
+  // a name Vite allows is not trusted as another origin: only as this server's own
+  assert.ok(refuseWrite(req("https://evil.local.dev", "app.local.dev", "127.0.0.1"), K, { allowedHosts: [".local.dev"] }))
+  // a refusal says what to do
+  assert.match(refuseWrite(req("https://abc.ngrok.app", "localhost:5173", "127.0.0.1"), K) ?? "", /add "https:\/\/abc\.ngrok\.app" to swatch\(\{ allowedOrigins/)
+  assert.equal(refuseWrite(req("http://localhost:5173", "localhost:5173", "127.0.0.1"), "x".repeat(48)), STALE_KEY)
   // a script with no Origin: from this machine directly yes; through a local proxy, or from the network, no
   assert.equal(refuseWrite(req(undefined, "localhost:5173", "127.0.0.1"), K), null)
   assert.equal(refuseWrite(req(undefined, "localhost:5173", "::1"), K), null)
@@ -134,16 +166,47 @@ test("who may write", () => {
 test("a save across several stylesheets changes all of them or none", () => {
   const dir = mkdtempSync(join(tmpdir(), "swatch-atomic-"))
   writeFileSync(join(dir, "a.css"), ":root { --a: red; }\n")
-  mkdirSync(join(dir, "locked"))
-  writeFileSync(join(dir, "locked", "b.css"), ":root { --b: blue; }\n")
+  writeFileSync(join(dir, "b.css"), ":root { --b: blue; }\n")
   const project = new Project(dir)
-  // b.css's folder cannot be written to: a's change must not stay behind
-  chmodSync(join(dir, "locked"), 0o555)
+  // b.css is read-only: it is not written over, and a's change must not stay behind
+  chmodSync(join(dir, "b.css"), 0o444)
   try {
     assert.throws(() => project.write([{ theme: "light", name: "--a", value: "green" }, { theme: "light", name: "--b", value: "navy" }]), /nothing was saved/)
     assert.equal(readFileSync(join(dir, "a.css"), "utf8"), ":root { --a: red; }\n")
-    assert.equal(readFileSync(join(dir, "locked", "b.css"), "utf8"), ":root { --b: blue; }\n")
-  } finally { chmodSync(join(dir, "locked"), 0o755) }
+    assert.equal(readFileSync(join(dir, "b.css"), "utf8"), ":root { --b: blue; }\n")
+  } finally { chmodSync(join(dir, "b.css"), 0o644) }
+})
+
+test("a save keeps the file the file it was: a link stays a link, the permissions stay, a locked folder is no obstacle", () => {
+  const dir = mkdtempSync(join(tmpdir(), "swatch-same-"))
+  mkdirSync(join(dir, "design")); mkdirSync(join(dir, "app"))
+  writeFileSync(join(dir, "design", "tokens.css"), ":root { --a: red; }\n")
+  chmodSync(join(dir, "design", "tokens.css"), 0o600)
+  symlinkSync(join(dir, "design", "tokens.css"), join(dir, "app", "tokens.css"))
+  new Project(join(dir, "app")).write([{ theme: "light", name: "--a", value: "green" }])
+  assert.ok(lstatSync(join(dir, "app", "tokens.css")).isSymbolicLink())
+  assert.equal(readFileSync(join(dir, "design", "tokens.css"), "utf8"), ":root { --a: green; }\n")
+  assert.equal(statSync(join(dir, "design", "tokens.css")).mode & 0o777, 0o600)
+  assert.deepEqual(readdirSync(join(dir, "design")), ["tokens.css"])
+  // a folder that takes no new files: the stylesheet is written in place
+  chmodSync(join(dir, "design"), 0o555)
+  try {
+    new Project(join(dir, "app")).write([{ theme: "light", name: "--a", value: "blue" }])
+    assert.equal(readFileSync(join(dir, "design", "tokens.css"), "utf8"), ":root { --a: blue; }\n")
+  } finally { chmodSync(join(dir, "design"), 0o755) }
+})
+
+test("an edit that says what it replaces is refused when the stylesheet holds something else", () => {
+  const dir = mkdtempSync(join(tmpdir(), "swatch-was-"))
+  writeFileSync(join(dir, "a.css"), ":root { --a: red; --b: blue; }\n")
+  const project = new Project(dir)
+  // the panel read red; an editor has since made it crimson
+  writeFileSync(join(dir, "a.css"), ":root { --a: crimson; --b: blue; }\n")
+  assert.throws(() => project.write([{ theme: "light", name: "--b", value: "navy", was: "blue" }, { theme: "light", name: "--a", value: "green", was: "red" }]), /--a changed in the stylesheet .*red then, crimson now.*nothing was saved/)
+  assert.equal(readFileSync(join(dir, "a.css"), "utf8"), ":root { --a: crimson; --b: blue; }\n")
+  // knowing what is there, it goes through; so does a new token (was: null) and an edit that does not say
+  project.write([{ theme: "light", name: "--a", value: "green", was: "crimson" }, { theme: "light", name: "--c", value: "teal", was: null }, { theme: "light", name: "--b", value: "navy" }])
+  assert.equal(readFileSync(join(dir, "a.css"), "utf8"), ":root { --a: green; --b: navy; --c: teal; }\n")
 })
 
 test("folders named public, build or vendor are searched; node_modules, hidden folders and the build output are not", () => {

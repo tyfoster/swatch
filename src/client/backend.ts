@@ -9,7 +9,9 @@ export type Token = {
   darkAt?: Dark
   uses: { file: string; n: number }[]; isNew?: boolean
 }
-export type Edit = { name: string; theme: Theme; value: string }
+/** `was` is the value the panel last read for it (null: none): a save is
+ *  refused when the stylesheet no longer holds that. */
+export type Edit = { name: string; theme: Theme; value: string; was?: string | null }
 export type Change = { name: string; theme: Theme; from: string | null; to: string | null }
 /** The stylesheets, their tokens, how the dark theme is selected, the
  *  project's own section titles (if it set any), and whether a coding
@@ -37,16 +39,28 @@ const json = async (r: Response) => {
   if (!r.ok) throw new Error(body?.error ?? `HTTP ${r.status}`)
   return body
 }
-// the session key the plugin put on this script's tag, sent with every
-// write (see server/guard.ts)
-const KEY = typeof document === "undefined" ? "" : document.querySelector<HTMLScriptElement>("script[data-swatch-key]")?.dataset.swatchKey ?? ""
-const writing = { "content-type": "application/json", "x-swatch-key": KEY }
+// The session key, sent with every write (see server/guard.ts). The plugin
+// puts it on the script tag it adds to the page; a tag written by hand (a
+// framework that renders its own HTML) has none, and a page left open
+// while the dev server restarted has an old one, so the panel asks the
+// server for it when it has none or the one it has is refused.
+let key = typeof document === "undefined" ? "" : document.querySelector<HTMLScriptElement>("script[data-swatch-key]")?.dataset.swatchKey ?? ""
+const askKey = async () => { key = ((await fetch("/__swatch/key").then(json)) as { key: string }).key }
+const send = async (url: string, method: "POST" | "DELETE", body?: unknown) => {
+  if (!key) await askKey().catch(() => {})
+  const go = () => fetch(url, { method, headers: { "content-type": "application/json", "x-swatch-key": key }, body: body === undefined ? undefined : JSON.stringify(body) })
+  let r = await go()
+  if (r.status === 403 && r.headers.get("x-swatch-refused") === "key") {
+    try { await askKey(); r = await go() } catch { /* the first answer says why */ }
+  }
+  return json(r)
+}
 export const http: Backend = {
   read: () => fetch("/__swatch").then(json),
-  write: (edits) => fetch("/__swatch", { method: "POST", headers: writing, body: JSON.stringify(edits) }).then(json),
-  request: (body) => fetch("/__swatch/request", { method: "POST", headers: writing, body: JSON.stringify(body) }).then(json),
+  write: (edits) => send("/__swatch", "POST", edits),
+  request: (body) => send("/__swatch/request", "POST", body),
   incoming: () => fetch("/__swatch/incoming").then(json),
-  clearIncoming: () => fetch("/__swatch/incoming", { method: "DELETE", headers: writing }).then(json),
+  clearIncoming: () => send("/__swatch/incoming", "DELETE"),
   // Asks every two seconds whether anything moved, while the tab is in
   // view. Asking, rather than holding a connection open, keeps every tab
   // from taking one of the few connections a browser allows each site.
